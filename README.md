@@ -1,8 +1,34 @@
 # Growth Acquisition for DeepSeek Harness
 
+[中文](README.zh.md) · English
+
 `dsh-growth` is a local-first DeepSeek Harness bundle for evidence-backed user growth and customer acquisition analysis.
 
 It covers AARRR funnels, activation, retention cohorts, referral loops, MRR bridges, CAC/LTV/payback, HADI experiments, RICE prioritization and WBR/MBR reports for Markdown, CSV and JSONL data.
+
+## User and company pain points
+
+Growth work often breaks down in the gap between data, decisions and execution:
+
+| Pain point | Required capability |
+| --- | --- |
+| Growth data is scattered across notes, event exports, revenue sheets and team documents. | Read local Markdown, CSV, JSON and JSONL with a consistent analysis flow. |
+| Teams use different definitions for activation, retention, CAC, LTV and MRR. | Make metric definitions, fields, periods, sources and caveats explicit. |
+| Funnel dashboards show where users drop, but not what to investigate next. | Identify bottlenecks, segment differences, evidence gaps and next checks. |
+| Ideas become long backlogs without a falsifiable hypothesis or owner. | Turn opportunities into HADI experiments with guardrails and RICE/ICE scores. |
+| Weekly and monthly reviews are repetitive, disconnected from experiments and hard to audit. | Generate evidence-linked WBR, MBR, QBR and experiment-review Markdown. |
+| Sensitive customer data should stay inside the company's knowledge boundary. | Keep analysis local-first with path limits, warnings and guarded writes. |
+
+## Application scenarios
+
+| Scenario | How `dsh-growth` is used |
+| --- | --- |
+| New product or PMF discovery | Audit JTBD, ICP, PMF Survey, North Star and evidence readiness. |
+| Customer acquisition | Compare acquisition, activation and revenue conversion by channel and segment. |
+| Onboarding optimization | Locate the activation bottleneck and create a measurable HADI experiment. |
+| Retention improvement | Build day/week/month cohorts, inspect lifecycle states and compare user segments. |
+| SaaS or subscription monetization | Reconcile MRR movements and calculate ARR, NRR, CAC, LTV and payback. |
+| Growth operating cadence | Produce weekly/monthly reviews with findings, decisions, caveats and next actions. |
 
 ## Included tools
 
