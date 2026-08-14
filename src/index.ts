@@ -1,8 +1,9 @@
 import type { Context } from '@deepseek-ai/cordis'
 import Schema from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-fs'
+import { GrowthDataService } from './service.js'
 import { registerGrowthTools } from './tools.js'
-import type { GrowthConfig } from './types.js'
+import type { FileSystemLike, GrowthConfig } from './types.js'
 
 export const name = 'dsh-growth'
 export const inject = ['tools', 'fs']
@@ -22,5 +23,7 @@ export const Config: Schema<GrowthConfig> = Schema.object({
 })
 
 export function apply(ctx: Context, config: GrowthConfig): void {
+  const fs = (ctx as unknown as { fs: FileSystemLike }).fs
+  new GrowthDataService(ctx, fs, config)
   registerGrowthTools(ctx, config)
 }

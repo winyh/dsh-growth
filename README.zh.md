@@ -30,6 +30,9 @@
 
 ## 核心能力
 
+- `growth_doctor`：分析前检查本地目录、数据文件和质量风险
+- `growth_profile_dataset`：推断字段、覆盖率、日期范围和质量警告，不返回原始行
+- `growth_review`：从业务目标出发，编排画像、分析、瓶颈和下一步行动
 - 用户增长与客户获取分析
 - JTBD、ICP、PMF 和 North Star 审计
 - AARRR 漏斗分析
@@ -43,6 +46,13 @@
 
 ## 默认配置
 
+将插件安装到 DeepSeek Harness profile：
+
+```bash
+dsh plugin --profile growth add dsh-growth
+dsh --profile growth --dump-config
+```
+
 ```yaml
 defaultRoot: D:\ObsidianData
 reportDir: .dsh-growth/reports
@@ -54,7 +64,10 @@ defaultTimezone: Asia/Shanghai
 
 ## 典型用法
 
+第一次使用时，建议先从目标导向入口开始：
+
 ```text
+以“提升激活率”为目标复盘 events.csv；先告诉我数据缺什么，再给出结论。
 审计这份增长计划，找出最大的指标和证据缺口。
 分析 events.csv 的 AARRR 漏斗，并比较不同获客渠道。
 根据 customers.csv 计算 MRR Bridge、NRR、CAC 和 Payback。
@@ -75,6 +88,8 @@ defaultTimezone: Asia/Shanghai
 ```
 
 4. 报告先以 Markdown 返回。需要写入已有笔记时，先调用 `growth_apply` 使用 `confirm=false` 预览，确认内容后再使用 `confirm=true` 写入。
+
+工具结果统一包含 `ok`、`data`、`warnings`、`assumptions`、`lineage` 和 `nextActions`。使用数字做决策前，必须先阅读 `warnings` 和 `lineage`。
 
 ### 数据字段示例
 

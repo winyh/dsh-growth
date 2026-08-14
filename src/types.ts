@@ -108,6 +108,83 @@ export interface Dataset {
   warnings: string[]
 }
 
+export type QualityStatus = 'pass' | 'warning' | 'error'
+
+export interface FieldCandidate {
+  field: string
+  score: number
+  coverage: number
+  nonEmpty: number
+  reason: string
+}
+
+export interface DatasetProfile {
+  source: string
+  rowCount: number
+  columnCount: number
+  columns: string[]
+  fieldCandidates: Record<string, FieldCandidate[]>
+  selectedFields: Record<string, string | null>
+  distinctValues: {
+    events: string[]
+    movementTypes: string[]
+    currencies: string[]
+  }
+  dateRange: { min: string; max: string } | null
+  quality: {
+    status: QualityStatus
+    duplicateRows: number
+    missingRows: number
+    invalidDateRows: number
+    invalidNumberRows: number
+    warnings: string[]
+  }
+  recommendations: string[]
+}
+
+export interface DoctorFileSummary {
+  path: string
+  extension: string
+  rowCount: number | null
+  status: QualityStatus
+  warnings: string[]
+}
+
+export interface GrowthDoctorResult {
+  generatedAt: string
+  root: string
+  checks: Array<{ name: string; status: QualityStatus; message: string }>
+  files: {
+    scanned: number
+    supported: number
+    skipped: number
+    byExtension: Record<string, number>
+  }
+  datasets: DoctorFileSummary[]
+  summary: {
+    status: QualityStatus
+    errors: number
+    warnings: number
+  }
+  nextActions: string[]
+}
+
+export interface GrowthReviewResult {
+  generatedAt: string
+  goal: string
+  profiles: DatasetProfile[]
+  analyses: {
+    funnel?: FunnelAnalysis
+    cohort?: CohortAnalysis
+    economics?: EconomicsAnalysis
+    noteAudit?: GrowthAuditResult
+  }
+  bottlenecks: string[]
+  hypotheses: string[]
+  nextActions: string[]
+  warnings: string[]
+}
+
 export interface FunnelStageResult {
   name: string
   event: string
@@ -122,6 +199,10 @@ export interface FunnelAnalysis {
   source: string
   userCount: number
   eventRows: number
+  sequenceMode?: 'any-event' | 'ordered'
+  attribution?: 'first-touch' | 'last-touch' | 'entry-touch'
+  conversionWindowDays?: number | null
+  timezone?: string
   stages: FunnelStageResult[]
   bottleneck: FunnelStageResult | null
   byChannel: Record<string, FunnelStageResult[]>
@@ -142,6 +223,7 @@ export interface CohortAnalysis {
   cohortEvent: string
   retentionEvent: string
   interval: 'day' | 'week' | 'month'
+  timezone?: string
   cohorts: Array<{
     cohort: string
     size: number
@@ -155,6 +237,8 @@ export interface EconomicsAnalysis {
   generatedAt: string
   source: string
   currency: string
+  amountMode?: 'absolute' | 'signed'
+  movementSource?: 'movement' | 'snapshot'
   periods: Array<{
     period: string
     beginningMrr: number | null

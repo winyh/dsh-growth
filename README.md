@@ -34,6 +34,9 @@ Growth work often breaks down in the gap between data, decisions and execution:
 
 | Tool | Purpose |
 |---|---|
+| `growth_doctor` | Check the local workspace and summarize dataset health before analysis |
+| `growth_profile_dataset` | Infer fields, coverage, date range and data-quality warnings without raw rows |
+| `growth_review` | Start from a business goal and orchestrate profiling, analysis, bottleneck and next actions |
 | `growth_audit_note` | Audit one growth note for JTBD, PMF, North Star, AARRR and evidence quality |
 | `growth_audit_vault` | Scan a local knowledge base for growth-document gaps |
 | `growth_funnel_analyze` | Analyze AARRR-style event funnels by channel and segment |
@@ -47,6 +50,13 @@ Growth work often breaks down in the gap between data, decisions and execution:
 
 ## Quick start
 
+Install the plugin into a DeepSeek Harness profile:
+
+```bash
+dsh plugin --profile growth add dsh-growth
+dsh --profile growth --dump-config
+```
+
 Configure the plugin through the host. A minimal configuration is:
 
 ```yaml
@@ -59,12 +69,15 @@ defaultTimezone: "Asia/Shanghai"
 Then use the tools from the conversation. Typical requests are:
 
 ```text
+Run a growth review for the goal "improve activation" using events.csv; tell me what is missing before making a recommendation.
 Audit growth-plan.md for PMF, North Star, AARRR metrics and evidence gaps.
 Analyze events.csv as an AARRR funnel and compare channel and segment performance.
 Analyze mrr.csv for MRR Bridge, NRR, CAC, LTV and Payback using a gross margin of 0.8.
 Turn the largest activation bottleneck into a HADI experiment and score it with RICE.
 Generate this week's WBR as Markdown; do not write a file yet.
 ```
+
+Tool results use a stable envelope with `ok`, `data`, `warnings`, `assumptions`, `lineage` and `nextActions`. Read `warnings` and `lineage` before using a number in a decision.
 
 ### Input conventions
 

@@ -10,6 +10,7 @@ export interface CohortOptions {
   timeField: string
   interval: 'day' | 'week' | 'month'
   maxPeriods: number
+  timezone?: string
 }
 
 function periodDistance(left: string, right: string, interval: CohortOptions['interval']): number {
@@ -26,6 +27,7 @@ function periodDistance(left: string, right: string, interval: CohortOptions['in
 
 export function analyzeCohorts(source: string, rows: Row[], options: CohortOptions): CohortAnalysis {
   const warnings: string[] = []
+  const timezone = options.timezone ?? 'UTC'
   const cohortStarts = new Map<string, Date>()
   for (const row of rows) {
     if (stringValue(row, options.eventField) !== options.cohortEvent) continue
@@ -44,9 +46,9 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
     const date = dateValue(row, options.timeField)
     const start = user ? cohortStarts.get(user) : undefined
     if (!user || !date || !start) continue
-    const index = intervalIndex(start, date, options.interval)
+    const index = intervalIndex(start, date, options.interval, timezone)
     if (index < 0 || index >= options.maxPeriods) continue
-    const cohort = normalizePeriod(start, options.interval)
+    const cohort = normalizePeriod(start, options.interval, timezone)
     retained.get(cohort)?.get(index)?.add(user)
       ?? (() => {
         const periods = retained.get(cohort) ?? new Map<number, Set<string>>()
@@ -59,7 +61,7 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
 
   const cohortSizes = new Map<string, number>()
   for (const start of cohortStarts.values()) {
-    const cohort = normalizePeriod(start, options.interval)
+    const cohort = normalizePeriod(start, options.interval, timezone)
     cohortSizes.set(cohort, (cohortSizes.get(cohort) ?? 0) + 1)
   }
   const cohorts = Array.from(cohortSizes.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([cohort, size]) => {
@@ -82,7 +84,7 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
     const user = stringValue(row, options.userField)
     const date = dateValue(row, options.timeField)
     if (!user || !date || stringValue(row, options.eventField) !== options.retentionEvent) continue
-    const period = normalizePeriod(date, options.interval)
+    const period = normalizePeriod(date, options.interval, timezone)
     activeByUser.set(user, [...(activeByUser.get(user) ?? []), period])
   }
   for (const periods of activeByUser.values()) {
@@ -102,6 +104,7 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
     cohortEvent: options.cohortEvent,
     retentionEvent: options.retentionEvent,
     interval: options.interval,
+    timezone,
     cohorts,
     lifecycle,
     warnings,

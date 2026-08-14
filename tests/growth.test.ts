@@ -35,6 +35,29 @@ describe('growth analysis', () => {
     expect(result.byChannel.content).toBeDefined()
   })
 
+  it('supports a strict ordered funnel and conversion window', () => {
+    const result = analyzeFunnel('ordered.json', [
+      { user_id: 'u1', event: 'acquired', timestamp: '2026-01-01T00:00:00Z', channel: 'content' },
+      { user_id: 'u1', event: 'activated', timestamp: '2026-01-02T00:00:00Z', channel: 'content' },
+      { user_id: 'u2', event: 'activated', timestamp: '2026-01-01T00:00:00Z', channel: 'ads' },
+      { user_id: 'u2', event: 'acquired', timestamp: '2026-01-02T00:00:00Z', channel: 'ads' },
+    ], {
+      stages: [
+        { name: 'Acquisition', event: 'acquired' },
+        { name: 'Activation', event: 'activated' },
+      ],
+      userField: 'user_id',
+      eventField: 'event',
+      timeField: 'timestamp',
+      sequenceMode: 'ordered',
+      conversionWindowDays: 3,
+      attribution: 'entry-touch',
+    })
+    expect(result.sequenceMode).toBe('ordered')
+    expect(result.stages[0]?.users).toBe(2)
+    expect(result.stages[1]?.users).toBe(1)
+  })
+
   it('builds a daily retention cohort', () => {
     const result = analyzeCohorts('events.json', events, {
       cohortEvent: 'acquired',
@@ -88,6 +111,26 @@ describe('growth analysis', () => {
     expect(result.periods[1]?.endingMrr).toBe(600)
     expect(result.periods[0]?.cac).toBe(200)
     expect(result.totals.arr).toBe(7200)
+  })
+
+  it('keeps signed MRR movements signed and warns on positive churn', () => {
+    const result = analyzeEconomics('signed.json', [
+      { period: '2026-01', type: 'new', amount: 100, customer_id: 'u1', active_customers: 1 },
+      { period: '2026-02', type: 'churned', amount: -20, customer_id: 'u1', active_customers: 0 },
+    ], {
+      periodField: 'period',
+      typeField: 'type',
+      amountField: 'amount',
+      customerField: 'customer_id',
+      spendField: 'spend',
+      currency: 'CNY',
+      grossMargin: 0.8,
+      amountMode: 'signed',
+      beginningMrr: 0,
+    })
+    expect(result.amountMode).toBe('signed')
+    expect(result.periods[1]?.churnedMrr).toBe(-20)
+    expect(result.periods[1]?.endingMrr).toBe(80)
   })
 
   it('returns explainable audit gaps and an experiment card', () => {

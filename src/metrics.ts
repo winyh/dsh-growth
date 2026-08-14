@@ -28,22 +28,51 @@ export function parseList(value: string | undefined): string[] {
   return trimmed.split(',').map((item) => item.trim()).filter(Boolean)
 }
 
-export function normalizePeriod(date: Date, interval: 'day' | 'week' | 'month'): string {
-  const year = date.getUTCFullYear()
-  const month = String(date.getUTCMonth() + 1).padStart(2, '0')
+interface CalendarParts {
+  year: number
+  month: number
+  day: number
+}
+
+function calendarParts(date: Date, timezone: string): CalendarParts {
+  if (timezone === 'UTC' || timezone === 'Etc/UTC') return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() }
+  try {
+    const parts = new Intl.DateTimeFormat('en-CA', { timeZone: timezone, year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(date)
+    const values = Object.fromEntries(parts.map((part) => [part.type, part.value]))
+    const year = Number(values.year)
+    const month = Number(values.month)
+    const day = Number(values.day)
+    if ([year, month, day].every(Number.isFinite)) return { year, month, day }
+  } catch {
+    // The caller still receives a deterministic UTC result and a warning is added by higher-level tools.
+  }
+  return { year: date.getUTCFullYear(), month: date.getUTCMonth() + 1, day: date.getUTCDate() }
+}
+
+function dayStart(date: Date, timezone: string): Date {
+  const parts = calendarParts(date, timezone)
+  return new Date(Date.UTC(parts.year, parts.month - 1, parts.day))
+}
+
+export function normalizePeriod(date: Date, interval: 'day' | 'week' | 'month', timezone = 'UTC'): string {
+  const { year, month: monthNumber, day: dayNumber } = calendarParts(date, timezone)
+  const month = String(monthNumber).padStart(2, '0')
   if (interval === 'month') return `${year}-${month}`
-  if (interval === 'day') return `${year}-${month}-${String(date.getUTCDate()).padStart(2, '0')}`
-  const start = new Date(Date.UTC(year, date.getUTCMonth(), date.getUTCDate()))
+  if (interval === 'day') return `${year}-${month}-${String(dayNumber).padStart(2, '0')}`
+  const start = new Date(Date.UTC(year, monthNumber - 1, dayNumber))
   const day = start.getUTCDay() || 7
   start.setUTCDate(start.getUTCDate() - day + 1)
   return `${start.getUTCFullYear()}-${String(start.getUTCMonth() + 1).padStart(2, '0')}-${String(start.getUTCDate()).padStart(2, '0')}`
 }
 
-export function intervalIndex(start: Date, current: Date, interval: 'day' | 'week' | 'month'): number {
-  const milliseconds = current.getTime() - start.getTime()
-  if (interval === 'day') return Math.floor(milliseconds / 86_400_000)
-  if (interval === 'week') return Math.floor(milliseconds / (7 * 86_400_000))
-  return (current.getUTCFullYear() - start.getUTCFullYear()) * 12 + current.getUTCMonth() - start.getUTCMonth()
+export function intervalIndex(start: Date, current: Date, interval: 'day' | 'week' | 'month', timezone = 'UTC'): number {
+  const startDay = dayStart(start, timezone)
+  const currentDay = dayStart(current, timezone)
+  if (interval === 'day') return Math.floor((currentDay.getTime() - startDay.getTime()) / 86_400_000)
+  if (interval === 'week') return Math.floor((currentDay.getTime() - startDay.getTime()) / (7 * 86_400_000))
+  const startParts = calendarParts(start, timezone)
+  const currentParts = calendarParts(current, timezone)
+  return (currentParts.year - startParts.year) * 12 + currentParts.month - startParts.month
 }
 
 export function weightedAverage(values: Array<{ value: number; weight: number }>): number | null {
