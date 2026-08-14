@@ -12,12 +12,12 @@ import { parseList } from './metrics.js'
 import { parseNote } from './markdown.js'
 import { renderReport } from './reports.js'
 import { resultEnvelope, renderResult, resultSchema } from './output.js'
-import { buildReview, inferStages } from './review.js'
+import { buildReview, inferStages, selectReviewSources } from './review.js'
 import { doctorRoot, profileDataset } from './quality.js'
 import type { GrowthDataServiceApi } from './service.js'
 import { readNote, scanGrowthVault } from './vault.js'
 import type { ResultLineage } from './output.js'
-import type { CohortAnalysis, DatasetProfile, EconomicsAnalysis, FileSystemLike, FunnelAnalysis, GrowthAuditResult, GrowthConfig, GrowthReviewResult, PriorityItem, PriorityMethod, ReportType } from './types.js'
+import type { CohortAnalysis, DatasetProfile, EconomicsAnalysis, FileSystemLike, FunnelAnalysis, GrowthAuditResult, GrowthConfig, GrowthReviewResult, PriorityItem, PriorityMethod, ReportType, Row } from './types.js'
 
 function growthOutput(maxChars: number) {
   return { schema: resultSchema, render: (_args: unknown, value: unknown) => renderResult(value, maxChars) }
@@ -202,6 +202,38 @@ function emitAnalysisCompleted(ctx: Context, kind: string, sources: string[], wa
   ctx.emit('growth/analysis-completed', { kind, sources, warningCount })
 }
 
+interface DiscoveredReviewDataset {
+  path: string
+  rows: Row[]
+  warnings: string[]
+  profile: DatasetProfile
+}
+
+async function discoverReviewDatasets(
+  fs: FileSystemLike,
+  config: GrowthConfig,
+  root: string,
+  signal: AbortSignal | undefined,
+  growthData?: GrowthDataServiceApi,
+): Promise<{ datasets: DiscoveredReviewDataset[]; warnings: string[] }> {
+  const health = await (growthData?.doctor(root, signal) ?? doctorRoot(fs, root, config, signal))
+  const datasets: DiscoveredReviewDataset[] = []
+  const warnings = health.checks.filter((check) => check.status === 'warning').map((check) => `Auto-discovery: ${check.message}`)
+  for (const summary of health.datasets) {
+    if (summary.status === 'error') continue
+    try {
+      const dataset = await (growthData?.readDataset(summary.path, signal) ?? readDataset(fs, config, summary.path, signal))
+      const profile = growthData?.profileDataset(summary.path, dataset.rows)
+        ?? profileDataset(summary.path, dataset.rows)
+      profile.quality.warnings = [...new Set([...profile.quality.warnings, ...dataset.warnings, ...summary.warnings])]
+      datasets.push({ path: summary.path, rows: dataset.rows, warnings: dataset.warnings, profile })
+    } catch (error) {
+      warnings.push(`Auto-discovery skipped '${summary.path}': ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return { datasets, warnings }
+}
+
 export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
   const fs = fsFrom(ctx)
   const growthData = growthDataFrom(ctx)
@@ -314,9 +346,10 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
 
   ctx.tools.register(defineTool({
     name: 'growth_review',
-    description: 'Run a goal-oriented local growth review: profile data, choose usable AARRR/cohort/MRR analyses, identify bottlenecks and propose evidence-aware next actions. Provide at least one data path.',
+    description: 'Run a goal-oriented local growth review: profile data, choose usable AARRR/cohort/MRR analyses, identify bottlenecks and propose evidence-aware next actions. Paths are optional; when omitted, the configured root is scanned and selected sources are reported.',
     parameters: {
       goal: { type: 'string', required: true, description: 'Business goal or decision to support, such as improve activation or decide whether to scale a channel.' },
+      root: { type: 'string', description: 'Optional directory under defaultRoot to scan when eventPath and economicsPath are omitted.' },
       eventPath: { type: 'string', description: 'Optional event dataset path for funnel/cohort analysis.' },
       economicsPath: { type: 'string', description: 'Optional MRR movement/cost dataset path for unit economics.' },
       notePath: { type: 'string', description: 'Optional Markdown growth note path for context and evidence audit.' },
@@ -332,25 +365,55 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
     },
     output: growthOutput(config.maxResultChars),
     async execute(args, exec) {
-      if (!args.eventPath?.trim() && !args.economicsPath?.trim() && !args.notePath?.trim()) throw new Error('growth_review requires at least one of eventPath, economicsPath or notePath')
+      let eventPath = args.eventPath?.trim() || undefined
+      let economicsPath = args.economicsPath?.trim() || undefined
+      const notePath = args.notePath?.trim() || undefined
       const profiles: DatasetProfile[] = []
       const lineage: ResultLineage[] = []
-      emitAnalysisStarted(ctx, 'review', [args.eventPath, args.economicsPath, args.notePath].filter((path): path is string => Boolean(path)), args.goal)
+      const reviewWarnings: string[] = []
+      const reviewAssumptions: string[] = []
+      const discoveredByPath = new Map<string, DiscoveredReviewDataset>()
+      if (!eventPath && !economicsPath && !notePath) {
+        const root = args.root?.trim() || config.defaultRoot
+        await ensureInsideRoot(fs, config, root, exec.signal)
+        const discovered = await discoverReviewDatasets(fs, config, root, exec.signal, growthData)
+        const selection = selectReviewSources(discovered.datasets.map((item) => item.profile))
+        discovered.datasets.forEach((item) => discoveredByPath.set(item.path, item))
+        eventPath = selection.eventPath
+        economicsPath = selection.economicsPath
+        reviewWarnings.push(...discovered.warnings)
+        if (eventPath) {
+          reviewAssumptions.push(`eventPath was omitted; auto-selected ${eventPath} from ${root} because it contains a user field, event field, timestamp and at least two recognizable stages`)
+          if (selection.eventCandidates.length > 1) reviewWarnings.push(`Auto-discovery found multiple event datasets; selected '${eventPath}'. Other candidates: ${selection.eventCandidates.slice(1).join(', ')}`)
+        } else {
+          reviewWarnings.push(`Auto-discovery found no dataset ready for funnel or cohort analysis under '${root}'`)
+        }
+        if (economicsPath) {
+          reviewAssumptions.push(`economicsPath was omitted; auto-selected ${economicsPath} from ${root} because it contains period, type and amount fields`)
+          if (selection.economicsCandidates.length > 1) reviewWarnings.push(`Auto-discovery found multiple MRR datasets; selected '${economicsPath}'. Other candidates: ${selection.economicsCandidates.slice(1).join(', ')}`)
+        } else {
+          reviewWarnings.push(`Auto-discovery found no dataset ready for MRR or unit-economics analysis under '${root}'`)
+        }
+        if (!eventPath && !economicsPath) reviewWarnings.push(`No usable event or MRR dataset was found under '${root}'; add a supported CSV, JSON or JSONL export and rerun the review`)
+      }
+      const selectedSources = [eventPath, economicsPath, notePath].filter((path): path is string => Boolean(path))
+      emitAnalysisStarted(ctx, 'review', selectedSources.length > 0 ? selectedSources : [args.root?.trim() || config.defaultRoot], args.goal)
       let funnel: FunnelAnalysis | undefined
       let cohort: CohortAnalysis | undefined
       let economics: EconomicsAnalysis | undefined
       let noteAudit: GrowthAuditResult | undefined
-      if (args.eventPath?.trim()) {
-        await ensureInsideRoot(fs, config, args.eventPath, exec.signal)
-        const dataset = await (growthData?.readDataset(args.eventPath, exec.signal) ?? readDataset(fs, config, args.eventPath, exec.signal))
-        const profile = growthData?.profileDataset(args.eventPath, dataset.rows, { userField: args.userField, eventField: args.eventField, timeField: args.timeField })
-          ?? profileDataset(args.eventPath, dataset.rows, { userField: args.userField, eventField: args.eventField, timeField: args.timeField })
+      if (eventPath) {
+        await ensureInsideRoot(fs, config, eventPath, exec.signal)
+        const discovered = discoveredByPath.get(eventPath)
+        const dataset = discovered ?? await (growthData?.readDataset(eventPath, exec.signal) ?? readDataset(fs, config, eventPath, exec.signal))
+        const profile = discovered?.profile ?? (growthData?.profileDataset(eventPath, dataset.rows, { userField: args.userField, eventField: args.eventField, timeField: args.timeField })
+          ?? profileDataset(eventPath, dataset.rows, { userField: args.userField, eventField: args.eventField, timeField: args.timeField }))
         profile.quality.warnings.push(...dataset.warnings)
         profiles.push(profile)
-        lineage.push({ source: args.eventPath, fields: [profile.selectedFields.userField, profile.selectedFields.eventField, profile.selectedFields.timeField].filter((field): field is string => Boolean(field)) })
+        lineage.push({ source: eventPath, fields: [profile.selectedFields.userField, profile.selectedFields.eventField, profile.selectedFields.timeField].filter((field): field is string => Boolean(field)) })
         const stages = inferStages(profile)
         if (stages.length >= 2 && profile.selectedFields.userField && profile.selectedFields.eventField) {
-          funnel = analyzeFunnel(args.eventPath, dataset.rows, {
+          funnel = analyzeFunnel(eventPath, dataset.rows, {
             stages,
             userField: profile.selectedFields.userField,
             eventField: profile.selectedFields.eventField,
@@ -365,7 +428,7 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
           const acquisition = stages.find((stage) => stage.name === 'Acquisition')
           const retention = stages.find((stage) => stage.name === 'Retention')
           if (acquisition && retention && profile.selectedFields.timeField) {
-            cohort = analyzeCohorts(args.eventPath, dataset.rows, {
+            cohort = analyzeCohorts(eventPath, dataset.rows, {
               cohortEvent: acquisition.event,
               retentionEvent: retention.event,
               userField: profile.selectedFields.userField,
@@ -380,16 +443,17 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
           profile.quality.warnings.push('Fewer than two recognizable funnel event values were found; funnel analysis was skipped')
         }
       }
-      if (args.economicsPath?.trim()) {
-        await ensureInsideRoot(fs, config, args.economicsPath, exec.signal)
-        const dataset = await (growthData?.readDataset(args.economicsPath, exec.signal) ?? readDataset(fs, config, args.economicsPath, exec.signal))
-        const profile = growthData?.profileDataset(args.economicsPath, dataset.rows, { periodField: args.periodField, typeField: args.typeField, amountField: args.amountField })
-          ?? profileDataset(args.economicsPath, dataset.rows, { periodField: args.periodField, typeField: args.typeField, amountField: args.amountField })
+      if (economicsPath) {
+        await ensureInsideRoot(fs, config, economicsPath, exec.signal)
+        const discovered = discoveredByPath.get(economicsPath)
+        const dataset = discovered ?? await (growthData?.readDataset(economicsPath, exec.signal) ?? readDataset(fs, config, economicsPath, exec.signal))
+        const profile = discovered?.profile ?? (growthData?.profileDataset(economicsPath, dataset.rows, { periodField: args.periodField, typeField: args.typeField, amountField: args.amountField })
+          ?? profileDataset(economicsPath, dataset.rows, { periodField: args.periodField, typeField: args.typeField, amountField: args.amountField }))
         profile.quality.warnings.push(...dataset.warnings)
         profiles.push(profile)
-        lineage.push({ source: args.economicsPath, fields: [profile.selectedFields.periodField, profile.selectedFields.typeField, profile.selectedFields.amountField].filter((field): field is string => Boolean(field)) })
+        lineage.push({ source: economicsPath, fields: [profile.selectedFields.periodField, profile.selectedFields.typeField, profile.selectedFields.amountField].filter((field): field is string => Boolean(field)) })
         if (profile.selectedFields.periodField && profile.selectedFields.typeField && profile.selectedFields.amountField) {
-          economics = analyzeEconomics(args.economicsPath, dataset.rows, {
+          economics = analyzeEconomics(economicsPath, dataset.rows, {
             periodField: profile.selectedFields.periodField,
             typeField: profile.selectedFields.typeField,
             amountField: profile.selectedFields.amountField,
@@ -406,15 +470,15 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
           profile.quality.warnings.push('Required period/type/amount fields were not all found; economics analysis was skipped')
         }
       }
-      if (args.notePath?.trim()) {
-        await ensureInsideRoot(fs, config, args.notePath, exec.signal)
-        noteAudit = auditGrowthNote(await readNote(fs, args.notePath, config, exec.signal))
-        lineage.push({ source: args.notePath })
+      if (notePath) {
+        await ensureInsideRoot(fs, config, notePath, exec.signal)
+        noteAudit = auditGrowthNote(await readNote(fs, notePath, config, exec.signal))
+        lineage.push({ source: notePath })
       }
-      const review = buildReview({ goal: args.goal, profiles, funnel, cohort, economics, noteAudit })
+      const review = buildReview({ goal: args.goal, profiles, funnel, cohort, economics, noteAudit, warnings: reviewWarnings })
       emitAnalysisCompleted(ctx, 'review', lineage.map((item) => item.source), review.warnings.length)
       review.warnings.forEach((message) => ctx.emit('growth/warning', { kind: 'review', message }))
-      return wrapResult(review, { lineage, nextActions: review.nextActions })
+      return wrapResult(review, { lineage, assumptions: reviewAssumptions, nextActions: review.nextActions })
     },
   }))
 

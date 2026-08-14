@@ -36,7 +36,7 @@ Growth work often breaks down in the gap between data, decisions and execution:
 |---|---|
 | `growth_doctor` | Check the local workspace and summarize dataset health before analysis |
 | `growth_profile_dataset` | Infer fields, coverage, date range and data-quality warnings without raw rows |
-| `growth_review` | Start from a business goal and orchestrate profiling, analysis, bottleneck and next actions |
+| `growth_review` | Start from a business goal and orchestrate profiling, analysis, bottleneck and next actions; paths may be omitted for local auto-discovery |
 | `growth_audit_note` | Audit one growth note for JTBD, PMF, North Star, AARRR and evidence quality |
 | `growth_audit_vault` | Scan a local knowledge base for growth-document gaps |
 | `growth_funnel_analyze` | Analyze AARRR-style event funnels by channel and segment |
@@ -71,6 +71,7 @@ defaultTimezone: "Asia/Shanghai"
 Then use the tools from the conversation. Typical requests are:
 
 ```text
+Run a growth review for the goal "improve activation" using the best available data under my configured root; show which files you selected and what is missing.
 Run a growth review for the goal "improve activation" using events.csv; tell me what is missing before making a recommendation.
 Audit growth-plan.md for PMF, North Star, AARRR metrics and evidence gaps.
 Analyze events.csv as an AARRR funnel and compare channel and segment performance.
@@ -84,6 +85,9 @@ Tool results use a stable envelope with `ok`, `data`, `warnings`, `assumptions`,
 ### Input conventions
 
 Event data should use `user_id`, `event` and `timestamp`, with optional `channel`, `segment`, `plan`, `revenue` and `currency` fields. MRR data should use `period`, `type`, `amount`, `customer_id`, `active_customers` and `spend`. Supported movement types are `new`, `expansion`, `reactivation`, `contraction`, `churn` and `churned`.
+The goal-oriented review recognizes common English and Chinese event values such as `signup` / `注册`, `activated` / `激活`, `active` / `活跃`, `invited` / `邀请` and `paid` / `付费`.
+
+For the first review, `eventPath` and `economicsPath` can be omitted. `growth_review` scans the configured local root, selects the most analysis-ready event and MRR files, and records the selected sources in `assumptions`, `warnings` and `lineage`. If more than one file is suitable, confirm the selection before using the result for a budget or product decision.
 
 ### Safe write workflow
 
@@ -92,7 +96,7 @@ Reports are returned as Markdown and are not written automatically. When updatin
 1. Call `growth_apply` with the complete Markdown content and `confirm=false` to preview.
 2. Review the preview and call it again with the same content and `confirm=true` only after approval.
 
-Writes stay inside `defaultRoot` and use a version guard to avoid overwriting concurrent edits. Read `warnings` before interpreting analytical results; missing values are not silently treated as zero.
+Writes stay inside `defaultRoot` and use a version guard to avoid overwriting concurrent edits. Read `warnings` before interpreting analytical results; missing amounts, spend, active-customer counts and beginning MRR remain unavailable instead of being silently treated as zero.
 
 ## Defaults
 

@@ -242,11 +242,11 @@ export interface EconomicsAnalysis {
   periods: Array<{
     period: string
     beginningMrr: number | null
-    newMrr: number
-    expansionMrr: number
-    reactivationMrr: number
-    contractionMrr: number
-    churnedMrr: number
+    newMrr: number | null
+    expansionMrr: number | null
+    reactivationMrr: number | null
+    contractionMrr: number | null
+    churnedMrr: number | null
     endingMrr: number | null
     mrrGrowthRate: number | null
     activeCustomers: number | null
@@ -261,7 +261,7 @@ export interface EconomicsAnalysis {
   totals: {
     endingMrr: number | null
     arr: number | null
-    totalSpend: number
+    totalSpend: number | null
     totalNewCustomers: number
   }
   warnings: string[]

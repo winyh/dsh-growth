@@ -1,15 +1,15 @@
 import type { CohortAnalysis, DatasetProfile, EconomicsAnalysis, FunnelAnalysis, GrowthReviewResult } from './types.js'
 
 const eventAliases: Array<{ stage: string; names: string[] }> = [
-  { stage: 'Acquisition', names: ['acquired', 'acquisition', 'signup', 'sign_up', 'registered', 'install', 'lead'] },
-  { stage: 'Activation', names: ['activated', 'activation', 'onboarding_completed', 'first_value', 'aha'] },
-  { stage: 'Retention', names: ['retained', 'retention', 'active', 'login', 'returned'] },
-  { stage: 'Referral', names: ['referred', 'referral', 'invited', 'invite_sent'] },
-  { stage: 'Revenue', names: ['paid', 'purchase', 'purchased', 'subscribed', 'subscription', 'payment'] },
+  { stage: 'Acquisition', names: ['acquired', 'acquisition', 'signup', 'sign_up', 'registered', 'install', 'lead', '注册', '获客', '安装', '线索', '报名'] },
+  { stage: 'Activation', names: ['activated', 'activation', 'onboarding_completed', 'first_value', 'aha', '激活', '完成引导', '首次价值', '首个价值', '首次使用'] },
+  { stage: 'Retention', names: ['retained', 'retention', 'active', 'login', 'returned', '留存', '活跃', '登录', '回访', '返回'] },
+  { stage: 'Referral', names: ['referred', 'referral', 'invited', 'invite_sent', '推荐', '转介绍', '邀请', '分享'] },
+  { stage: 'Revenue', names: ['paid', 'purchase', 'purchased', 'subscribed', 'subscription', 'payment', '付费', '购买', '订阅', '支付', '成交'] },
 ]
 
 function eventKey(value: string): string {
-  return value.toLowerCase().trim().replace(/[^a-z0-9]+/g, '_')
+  return value.normalize('NFKC').toLowerCase().trim().replace(/[^\p{L}\p{N}]+/gu, '_').replace(/^_|_$/g, '')
 }
 
 export function inferStages(profile: DatasetProfile): Array<{ name: string; event: string }> {
@@ -18,6 +18,43 @@ export function inferStages(profile: DatasetProfile): Array<{ name: string; even
     const event = names.map(eventKey).map((name) => values.get(name)).find(Boolean)
     return event ? [{ name: stage, event }] : []
   })
+}
+
+export interface ReviewSourceSelection {
+  eventPath?: string
+  economicsPath?: string
+  eventCandidates: string[]
+  economicsCandidates: string[]
+}
+
+function eventReadiness(profile: DatasetProfile): number {
+  if (!profile.selectedFields.userField || !profile.selectedFields.eventField || !profile.selectedFields.timeField) return 0
+  const stages = inferStages(profile).length
+  return stages >= 2 ? stages * 10 + Math.min(profile.rowCount, 10_000) / 10_000 : 0
+}
+
+function economicsReadiness(profile: DatasetProfile): number {
+  if (!profile.selectedFields.periodField || !profile.selectedFields.typeField || !profile.selectedFields.amountField) return 0
+  const movementTypes = new Set(['new', 'expansion', 'reactivation', 'contraction', 'churn', 'churned'])
+  if (!profile.distinctValues.movementTypes.some((value) => movementTypes.has(eventKey(value)))) return 0
+  return 10 + Math.min(profile.rowCount, 10_000) / 10_000
+}
+
+export function selectReviewSources(profiles: DatasetProfile[]): ReviewSourceSelection {
+  const eventCandidates = profiles
+    .map((profile) => ({ path: profile.source, score: eventReadiness(profile) }))
+    .filter((candidate) => candidate.score > 0)
+    .toSorted((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+  const economicsCandidates = profiles
+    .map((profile) => ({ path: profile.source, score: economicsReadiness(profile) }))
+    .filter((candidate) => candidate.score > 0)
+    .toSorted((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+  return {
+    eventPath: eventCandidates[0]?.path,
+    economicsPath: economicsCandidates[0]?.path,
+    eventCandidates: eventCandidates.map((candidate) => candidate.path),
+    economicsCandidates: economicsCandidates.map((candidate) => candidate.path),
+  }
 }
 
 function latestRetention(cohort: CohortAnalysis): number | null {
@@ -33,8 +70,9 @@ export function buildReview(input: {
   cohort?: CohortAnalysis
   economics?: EconomicsAnalysis
   noteAudit?: GrowthReviewResult['analyses']['noteAudit']
+  warnings?: string[]
 }): GrowthReviewResult {
-  const warnings = input.profiles.flatMap((profile) => profile.quality.warnings)
+  const warnings = [...(input.warnings ?? []), ...input.profiles.flatMap((profile) => profile.quality.warnings)]
   const bottlenecks: string[] = []
   const hypotheses: string[] = []
   const nextActions: string[] = []
@@ -79,4 +117,3 @@ export function buildReview(input: {
     warnings: [...new Set(warnings)],
   }
 }
-

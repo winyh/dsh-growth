@@ -133,6 +133,45 @@ describe('growth analysis', () => {
     expect(result.periods[1]?.endingMrr).toBe(80)
   })
 
+  it('does not convert missing MRR amounts or spend into zero', () => {
+    const result = analyzeEconomics('incomplete.json', [
+      { period: '2026-01', type: 'new', amount: 100, customer_id: 'u1', active_customers: 1, spend: 200 },
+      { period: '2026-01', type: 'churned', customer_id: 'u1' },
+    ], {
+      periodField: 'period',
+      typeField: 'type',
+      amountField: 'amount',
+      customerField: 'customer_id',
+      spendField: 'spend',
+      currency: 'CNY',
+      grossMargin: 0.8,
+      beginningMrr: 100,
+    })
+    expect(result.periods[0]?.churnedMrr).toBeNull()
+    expect(result.periods[0]?.endingMrr).toBeNull()
+    expect(result.periods[0]?.nrr).toBeNull()
+    expect(result.periods[0]?.cac).toBe(200)
+    expect(result.warnings.some((warning) => warning.includes('no amount'))).toBe(true)
+  })
+
+  it('leaves CAC unavailable when spend is absent', () => {
+    const result = analyzeEconomics('no-spend.json', [
+      { period: '2026-01', type: 'new', amount: 100, customer_id: 'u1', active_customers: 1 },
+    ], {
+      periodField: 'period',
+      typeField: 'type',
+      amountField: 'amount',
+      customerField: 'customer_id',
+      spendField: 'spend',
+      currency: 'CNY',
+      grossMargin: 0.8,
+      beginningMrr: 0,
+    })
+    expect(result.periods[0]?.cac).toBeNull()
+    expect(result.totals.totalSpend).toBeNull()
+    expect(result.warnings.some((warning) => warning.includes('No usable spend'))).toBe(true)
+  })
+
   it('returns explainable audit gaps and an experiment card', () => {
     const audit = auditGrowthNote(parseNote('weak.md', '# Growth\n\nA short idea.'))
     expect(audit.readiness.overall).toBeLessThan(50)

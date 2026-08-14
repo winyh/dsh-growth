@@ -83,10 +83,11 @@ function rowFingerprint(row: Row): string {
   }
 }
 
-function statusFor(rowCount: number, selectedFields: Record<string, string | null>, invalidDateRows: number, invalidNumberRows: number): 'pass' | 'warning' | 'error' {
+function statusFor(rowCount: number, selectedFields: Record<string, string | null>, invalidDateRows: number, invalidNumberRows: number, emptySelectedFields: number): 'pass' | 'warning' | 'error' {
   if (rowCount === 0) return 'error'
   const recognized = Object.values(selectedFields).filter(Boolean).length
   if (recognized === 0) return 'error'
+  if (emptySelectedFields > 0) return 'warning'
   if (invalidDateRows > rowCount * 0.2 || invalidNumberRows > rowCount * 0.2) return 'warning'
   if (!selectedFields.userField && !selectedFields.customerField) return 'warning'
   return 'pass'
@@ -99,6 +100,9 @@ export function profileDataset(source: string, rows: Row[], hints: Partial<Recor
     const typedRole = role as FieldRole
     return [role, selectField(typedRole, fieldCandidates[typedRole] ?? [], hints[typedRole], columns)]
   })) as Record<FieldRole, string | null>
+  const emptySelectedFields = Object.entries(selectedFields)
+    .filter(([, field]) => Boolean(field) && rows.every((row) => !nonEmpty(field ? row[field] : undefined)))
+    .map(([role, field]) => `${role}=${field}`)
 
   const timeField = selectedFields.timeField
   const amountFields = [selectedFields.amountField, selectedFields.spendField].filter((field): field is string => Boolean(field))
@@ -131,6 +135,7 @@ export function profileDataset(source: string, rows: Row[], hints: Partial<Recor
   if (!selectedFields.userField && !selectedFields.customerField) warnings.push('No user/customer identifier candidate was found; user-level conversion and retention cannot be trusted')
   if (!selectedFields.eventField && !selectedFields.typeField) warnings.push('No event or movement type candidate was found; event funnel and MRR bridge selection may be unavailable')
   if (!selectedFields.timeField) warnings.push('No timestamp/date candidate was found; time-window analysis will be unavailable')
+  if (emptySelectedFields.length > 0) warnings.push(`Detected fields contain no non-empty values: ${emptySelectedFields.join(', ')}`)
   if (invalidDateRows > 0) warnings.push(`${invalidDateRows} rows contain an invalid date in '${timeField}'`)
   if (invalidNumberRows > 0) warnings.push(`${invalidNumberRows} numeric cells are not parseable in amount/spend fields`)
   if (duplicateRows > 0) warnings.push(`${duplicateRows} duplicate rows detected; verify whether they are repeated events or ingestion duplicates`)
@@ -141,6 +146,7 @@ export function profileDataset(source: string, rows: Row[], hints: Partial<Recor
   else if (selectedFields.periodField && selectedFields.typeField && selectedFields.amountField) recommendations.push('Movement dataset is ready for an MRR bridge after confirming amount sign semantics')
   if (!selectedFields.userField && !selectedFields.customerField) recommendations.push('Add a stable pseudonymous user_id or customer_id; do not use email as a default identifier')
   if (!selectedFields.timeField) recommendations.push('Add an ISO-8601 timestamp or explicit period field before comparing time windows')
+  if (emptySelectedFields.length > 0) recommendations.push('Confirm the selected field mapping; a detected column with no values cannot support analysis')
   if (invalidDateRows > 0 || invalidNumberRows > 0) recommendations.push('Fix invalid dates/numbers or provide a mapping before using the result for decisions')
 
   return {
@@ -157,7 +163,7 @@ export function profileDataset(source: string, rows: Row[], hints: Partial<Recor
     },
     dateRange: minDate && maxDate ? { min: minDate.toISOString(), max: maxDate.toISOString() } : null,
     quality: {
-      status: statusFor(rows.length, selectedFields, invalidDateRows, invalidNumberRows),
+      status: statusFor(rows.length, selectedFields, invalidDateRows, invalidNumberRows, emptySelectedFields.length),
       duplicateRows,
       missingRows,
       invalidDateRows,
@@ -245,4 +251,3 @@ export async function doctorRoot(fs: FileSystemLike, root: string, config: Growt
     nextActions,
   }
 }
-

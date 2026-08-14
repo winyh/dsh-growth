@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { profileDataset } from '../src/quality.js'
-import { inferStages, buildReview } from '../src/review.js'
+import { inferStages, buildReview, selectReviewSources } from '../src/review.js'
 import type { Row } from '../src/types.js'
 
 describe('onboarding quality and review', () => {
@@ -31,5 +31,27 @@ describe('onboarding quality and review', () => {
     expect(review.nextActions.length).toBeGreaterThan(0)
     expect(review.goal).toBe('improve activation')
   })
-})
 
+  it('recognizes common Chinese event names', () => {
+    const profile = profileDataset('events.csv', [
+      { user_id: 'u1', event: '注册', timestamp: '2026-01-01' },
+      { user_id: 'u1', event: '激活', timestamp: '2026-01-02' },
+      { user_id: 'u1', event: '活跃', timestamp: '2026-01-03' },
+      { user_id: 'u1', event: '付费', timestamp: '2026-01-04' },
+    ])
+    expect(inferStages(profile).map((stage) => stage.name)).toEqual(['Acquisition', 'Activation', 'Retention', 'Revenue'])
+  })
+
+  it('selects the most analysis-ready event and economics sources', () => {
+    const eventProfile = profileDataset('events.csv', [
+      { user_id: 'u1', event: 'signup', timestamp: '2026-01-01' },
+      { user_id: 'u1', event: 'activated', timestamp: '2026-01-02' },
+    ])
+    const economicsProfile = profileDataset('mrr.csv', [
+      { period: '2026-01', type: 'new', amount: 100 },
+    ])
+    const selection = selectReviewSources([eventProfile, economicsProfile])
+    expect(selection.eventPath).toBe('events.csv')
+    expect(selection.economicsPath).toBe('mrr.csv')
+  })
+})
