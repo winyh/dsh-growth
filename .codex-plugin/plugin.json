@@ -1,0 +1,34 @@
+{
+  "name": "dsh-growth",
+  "version": "0.1.0",
+  "description": "Evidence-backed growth analysis tools for AARRR funnels, retention, experiments and MRR.",
+  "author": {
+    "name": "Local developer"
+  },
+  "license": "MIT",
+  "keywords": [
+    "dsh-plugin",
+    "growth-hacking",
+    "aarrr",
+    "retention",
+    "mrr",
+    "obsidian"
+  ],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "增长获客",
+    "shortDescription": "A local-first growth operating system for Markdown data.",
+    "longDescription": "Growth Acquisition turns local Markdown, CSV and JSONL data into explainable AARRR funnels, cohort retention, MRR bridges, unit economics, growth experiments and WBR/MBR reports.",
+    "developerName": "Local developer",
+    "category": "Productivity",
+    "capabilities": [
+      "Analyze",
+      "Write"
+    ],
+    "defaultPrompt": [
+      "Audit this growth plan and find the biggest evidence gaps.",
+      "Analyze my AARRR funnel and identify the highest-leverage bottleneck.",
+      "Turn this growth idea into a HADI experiment and RICE score it."
+    ]
+  }
+}

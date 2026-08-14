@@ -1,0 +1,13 @@
+- insert:
+    - id: dsh-growth
+      name: dsh-growth
+      config:
+        defaultRoot: "D:\\ObsidianData"
+        reportDir: ".dsh-growth/reports"
+        maxFiles: 500
+        maxRows: 100000
+        maxFileBytes: 1048576
+        maxTextChars: 180000
+        maxResultChars: 50000
+        defaultCurrency: "CNY"
+        defaultTimezone: "Asia/Shanghai"
