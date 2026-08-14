@@ -1,15 +1,17 @@
+import type { JsonValue } from '@deepseek-ai/dsh-tools'
+
 export interface ResultLineage {
   source: string
   fields?: string[]
   window?: { start?: string; end?: string; timezone?: string }
 }
 
-export interface ResultEnvelope<T = unknown> {
+export interface ResultEnvelope<T extends JsonValue = JsonValue> {
   ok: boolean
   data: T
   warnings: string[]
   assumptions: string[]
-  lineage: ResultLineage[]
+  lineage: Array<Record<string, JsonValue>>
   nextActions: string[]
 }
 
@@ -32,7 +34,7 @@ export const resultSchema = {
   },
 }
 
-export function resultEnvelope<T>(options: {
+export function resultEnvelope<T extends JsonValue>(options: {
   data: T
   warnings?: string[]
   assumptions?: string[]
@@ -44,7 +46,7 @@ export function resultEnvelope<T>(options: {
     data: options.data,
     warnings: [...(options.warnings ?? [])],
     assumptions: [...(options.assumptions ?? [])],
-    lineage: [...(options.lineage ?? [])],
+    lineage: [...(options.lineage ?? [])] as unknown as Array<Record<string, JsonValue>>,
     nextActions: [...(options.nextActions ?? [])],
   }
 }

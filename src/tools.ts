@@ -1,5 +1,5 @@
 import type { Context } from '@deepseek-ai/cordis'
-import { defineTool } from '@deepseek-ai/dsh-tools'
+import { defineTool, type JsonValue } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-fs'
 import { auditGrowthNote } from './context.js'
 import { readDataset } from './data.js'
@@ -27,7 +27,7 @@ function wrapResult(value: unknown, options: { lineage?: ResultLineage[]; assump
   const warnings = typeof value === 'object' && value !== null && 'warnings' in value && Array.isArray(value.warnings)
     ? value.warnings.filter((warning): warning is string => typeof warning === 'string')
     : []
-  return resultEnvelope({ data: value, warnings, assumptions: options.assumptions, lineage: options.lineage, nextActions: options.nextActions })
+  return resultEnvelope({ data: value as JsonValue, warnings, assumptions: options.assumptions, lineage: options.lineage, nextActions: options.nextActions })
 }
 
 function fsFrom(ctx: Context): FileSystemLike {

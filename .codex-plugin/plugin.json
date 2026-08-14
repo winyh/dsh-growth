@@ -1,6 +1,6 @@
 {
   "name": "dsh-growth",
-  "version": "0.1.0",
+  "version": "0.1.0+codex.local-20260814-142107",
   "description": "Evidence-backed growth analysis tools for AARRR funnels, retention, experiments and MRR.",
   "author": {
     "name": "Local developer"
@@ -16,7 +16,7 @@
   ],
   "skills": "./skills/",
   "interface": {
-    "displayName": "增长获客",
+    "displayName": "\u589e\u957f\u83b7\u5ba2",
     "shortDescription": "A local-first growth operating system for Markdown data.",
     "longDescription": "Growth Acquisition turns local Markdown, CSV and JSONL data into explainable AARRR funnels, cohort retention, MRR bridges, unit economics, growth experiments and WBR/MBR reports.",
     "developerName": "Local developer",
