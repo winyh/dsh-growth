@@ -53,9 +53,11 @@ Growth work often breaks down in the gap between data, decisions and execution:
 Install the plugin into a DeepSeek Harness profile:
 
 ```bash
-dsh plugin --profile growth add dsh-growth
-dsh --profile growth --dump-config
+npx --yes @deepseek-ai/dsh plugin --profile growth add dsh-growth
+npx --yes @deepseek-ai/dsh --profile growth --dump-config
 ```
+
+If `dsh` is already on your `PATH`, the equivalent short form is `dsh plugin --profile growth add dsh-growth`.
 
 Configure the plugin through the host. A minimal configuration is:
 

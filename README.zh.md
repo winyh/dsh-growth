@@ -49,9 +49,11 @@
 将插件安装到 DeepSeek Harness profile：
 
 ```bash
-dsh plugin --profile growth add dsh-growth
-dsh --profile growth --dump-config
+npx --yes @deepseek-ai/dsh plugin --profile growth add dsh-growth
+npx --yes @deepseek-ai/dsh --profile growth --dump-config
 ```
+
+如果 `dsh` 已经在系统 `PATH` 中，也可以使用简写：`dsh plugin --profile growth add dsh-growth`。
 
 ```yaml
 defaultRoot: D:\ObsidianData
