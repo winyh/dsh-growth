@@ -1,0 +1,389 @@
+import { auditGrowthNote } from './context.js'
+import { readDataset } from './data.js'
+import { inferStages } from './review.js'
+import { parseNote } from './markdown.js'
+import { doctorRoot, profileDataset } from './quality.js'
+import type {
+  DatasetProfile,
+  FileSystemLike,
+  GrowthAuditResult,
+  GrowthConfig,
+  GrowthNote,
+  GrowthOnboardingResult,
+  OnboardingDimension,
+  OnboardingMethod,
+  ReadinessStatus,
+} from './types.js'
+
+const ignoredDirectories = new Set(['.git', 'node_modules', 'lib', '.dsh-growth'])
+
+export interface OnboardingNote {
+  note: GrowthNote
+  audit: GrowthAuditResult
+  missingMetadata: string[]
+}
+
+export interface OnboardingCollection {
+  notes: OnboardingNote[]
+  scannedFiles: number
+  skippedFiles: number
+  errors: string[]
+}
+
+function extensionOf(path: string): string {
+  const match = /\.[^./\\]+$/.exec(path.toLowerCase())
+  return match?.[0] ?? ''
+}
+
+function isStale(value: unknown): boolean {
+  if (typeof value !== 'string' || !value.trim()) return true
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) || Date.now() - date.getTime() > 90 * 86_400_000
+}
+
+function isGrowthCandidate(note: GrowthNote): boolean {
+  const type = String(note.frontmatter.type ?? '').toLowerCase()
+  if (['growth-project', 'metric', 'experiment', 'campaign', 'growth-report', 'channel', 'pmf-survey'].includes(type)) return true
+  return /JTBD|ICP|PMF|North Star|AARRR|MRR|CAC|LTV|HADI|RICE|WBR|MBR|QBR|growth loop|增长|获客|留存|激活|实验|转化/i.test(note.content)
+}
+
+function metadataGaps(note: GrowthNote): string[] {
+  const gaps: string[] = []
+  if (!note.frontmatter.type) gaps.push('type')
+  if (!note.frontmatter.status) gaps.push('status')
+  if (isStale(note.frontmatter.updated)) gaps.push('updated')
+  if (!note.frontmatter.source && note.externalLinks.length === 0) gaps.push('source')
+  if (!note.frontmatter.target && !/target|目标/i.test(note.content)) gaps.push('target')
+  if (!note.frontmatter.owner && !/owner|负责人/i.test(note.content)) gaps.push('owner')
+  return gaps
+}
+
+export async function collectOnboardingNotes(
+  fs: FileSystemLike,
+  root: string,
+  config: GrowthConfig,
+  signal?: AbortSignal,
+  notePath?: string,
+): Promise<OnboardingCollection> {
+  const notes: OnboardingNote[] = []
+  const errors: string[] = []
+  let scannedFiles = 0
+  let skippedFiles = 0
+
+  const addNote = (path: string, content: string, force = false): void => {
+    const note = parseNote(path, content)
+    if (!force && !isGrowthCandidate(note)) return
+    notes.push({ note, audit: auditGrowthNote(note), missingMetadata: metadataGaps(note) })
+  }
+
+  if (notePath) {
+    const target = await fs.resolve(notePath, { signal })
+    const info = await fs.stat(target, signal)
+    if (!info || info.type !== 'file') throw new Error(`Markdown file not found: ${notePath}`)
+    if ((info.size ?? 0) > config.maxFileBytes) throw new Error(`File exceeds maxFileBytes (${config.maxFileBytes})`)
+    const content = await fs.readText(target, signal)
+    if (content.length > config.maxTextChars) throw new Error(`File exceeds maxTextChars (${config.maxTextChars})`)
+    addNote(notePath, content, true)
+    return { notes, scannedFiles: 1, skippedFiles: 0, errors }
+  }
+
+  async function visit(target: unknown, displayPath: string): Promise<void> {
+    if (scannedFiles >= config.maxFiles) {
+      skippedFiles += 1
+      return
+    }
+    let entries
+    try {
+      entries = await fs.listDir(target, signal)
+    } catch (error) {
+      errors.push(`${displayPath}: ${error instanceof Error ? error.message : String(error)}`)
+      return
+    }
+    for (const entry of entries) {
+      if (scannedFiles >= config.maxFiles) {
+        skippedFiles += 1
+        continue
+      }
+      if (entry.type === 'directory') {
+        if (!ignoredDirectories.has(entry.name.toLowerCase())) await visit(entry.target, `${displayPath.replace(/[\\/]$/, '')}/${entry.name}`)
+        continue
+      }
+      if (entry.type !== 'file') continue
+      scannedFiles += 1
+      if (extensionOf(entry.name) !== '.md') continue
+      const path = `${displayPath.replace(/[\\/]$/, '')}/${entry.name}`
+      try {
+        if ((entry.size ?? 0) > config.maxFileBytes) {
+          skippedFiles += 1
+          errors.push(`${path}: exceeds maxFileBytes`)
+          continue
+        }
+        const content = await fs.readText(entry.target, signal)
+        if (content.length > config.maxTextChars) {
+          skippedFiles += 1
+          errors.push(`${path}: exceeds maxTextChars`)
+          continue
+        }
+        addNote(path, content)
+      } catch (error) {
+        errors.push(`${path}: ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+  }
+
+  const rootTarget = await fs.resolve(root, { signal })
+  await visit(rootTarget, root)
+  return { notes, scannedFiles, skippedFiles, errors }
+}
+
+function statusForScore(score: number | null): ReadinessStatus {
+  if (score === null || score <= 0) return 'missing'
+  if (score >= 80) return 'ready'
+  return 'partial'
+}
+
+function auditScore(audits: OnboardingNote[], key: keyof GrowthAuditResult['readiness']): number | null {
+  if (audits.length === 0) return null
+  return Math.max(...audits.map((item) => item.audit.readiness[key]))
+}
+
+function auditEvidence(audits: OnboardingNote[], key: keyof GrowthAuditResult['readiness']): string[] {
+  return audits
+    .map((item) => ({ path: item.note.path, score: item.audit.readiness[key] }))
+    .toSorted((left, right) => right.score - left.score || left.path.localeCompare(right.path))
+    .slice(0, 3)
+    .map((item) => `${item.path}: ${item.score}/100`)
+}
+
+function dimension(
+  id: string,
+  label: string,
+  score: number | null,
+  evidence: string[],
+  missing: string[],
+  nextAction: string,
+): OnboardingDimension {
+  return { id, label, status: statusForScore(score), score, evidence, missing, nextAction }
+}
+
+function metadataDimension(notes: OnboardingNote[]): OnboardingDimension {
+  if (notes.length === 0) return dimension('operations', '运营准备度', null, [], ['项目笔记、负责人、状态、更新时间和来源'], '补充一份带负责人、状态、更新时间和来源的增长项目笔记')
+  const healthy = notes.filter((item) => item.missingMetadata.length === 0).length
+  const score = Math.round((healthy / notes.length) * 100)
+  const missing = [...new Set(notes.flatMap((item) => item.missingMetadata))]
+  return dimension(
+    'operations',
+    '运营准备度',
+    score,
+    notes.slice(0, 3).map((item) => `${item.note.path}: ${item.missingMetadata.length === 0 ? 'metadata ready' : `missing ${item.missingMetadata.join(', ')}`}`),
+    missing,
+    missing.length > 0 ? `补齐项目笔记中的 ${missing.join(', ')} 元数据` : '保持项目笔记的状态、更新时间和负责人持续更新',
+  )
+}
+
+function dataDimension(profiles: DatasetProfile[], warnings: string[]): { dimension: OnboardingDimension; eventProfiles: DatasetProfile[]; economicsProfiles: DatasetProfile[] } {
+  const eventProfiles = profiles.filter((profile) => profile.selectedFields.userField && profile.selectedFields.eventField && profile.selectedFields.timeField && inferStages(profile).length >= 2)
+  const movementTypes = new Set(['new', 'expansion', 'reactivation', 'contraction', 'churn', 'churned'])
+  const economicsProfiles = profiles.filter((profile) => profile.selectedFields.periodField && profile.selectedFields.typeField && profile.selectedFields.amountField && profile.distinctValues.movementTypes.some((value) => movementTypes.has(value.trim().toLowerCase())))
+  if (profiles.length === 0) {
+    return {
+      dimension: dimension('data', '数据基础', 0, [], ['至少一份事件数据；如涉及商业化，还需要 MRR / 成本数据'], '先提供事件导出；如果需要 CAC、LTV 或 Payback，再补充 MRR 和获客成本数据'),
+      eventProfiles,
+      economicsProfiles,
+    }
+  }
+  const qualityReady = warnings.length === 0 && profiles.every((profile) => profile.quality.status === 'pass' && profile.quality.warnings.length === 0)
+  const score = (eventProfiles.length > 0 ? 50 : 0) + (economicsProfiles.length > 0 ? 30 : 0) + (qualityReady ? 20 : 10)
+  const missing: string[] = []
+  if (eventProfiles.length === 0) missing.push('可识别至少两个阶段的事件数据')
+  if (economicsProfiles.length === 0) missing.push('MRR / 成本数据，或明确暂不进行商业化分析')
+  if (!qualityReady) missing.push('修复数据质量警告并确认字段映射')
+  return {
+    dimension: dimension(
+      'data',
+      '数据基础',
+      score,
+      profiles.slice(0, 5).map((profile) => `${profile.source}: ${profile.quality.status}, ${profile.rowCount} rows`),
+      missing,
+      missing[0] ?? '确认数据口径、时间窗口和来源后开始增长复盘',
+    ),
+    eventProfiles,
+    economicsProfiles,
+  }
+}
+
+function signalStatus(text: string, pattern: RegExp): ReadinessStatus {
+  return pattern.test(text) ? 'ready' : 'not-detected'
+}
+
+function methodFromDimension(
+  id: string,
+  name: string,
+  capability: OnboardingMethod['pluginCapability'],
+  item: OnboardingDimension,
+): OnboardingMethod {
+  return {
+    id,
+    name,
+    pluginCapability: capability,
+    projectStatus: item.status,
+    evidence: item.evidence,
+    nextAction: item.status === 'ready' ? undefined : item.nextAction,
+  }
+}
+
+export function buildGrowthOnboarding(input: {
+  root: string
+  notes: OnboardingNote[]
+  profiles: DatasetProfile[]
+  datasetWarnings: string[]
+  scanErrors: string[]
+  skippedFiles?: number
+}): GrowthOnboardingResult {
+  const { notes, profiles } = input
+  const data = dataDimension(profiles, input.datasetWarnings)
+  const audits = notes
+  const text = notes.map((item) => item.note.content).join('\n')
+  const jtbd = dimension('jtbd', 'JTBD / ICP', auditScore(audits, 'jtbd'), auditEvidence(audits, 'jtbd'), ['目标用户、触发场景、期望进步和现有替代方案'], '补充目标用户、触发场景、期望进步和现有替代方案')
+  const pmf = dimension('pmf', 'PMF 验证', auditScore(audits, 'pmf'), auditEvidence(audits, 'pmf'), ['PMF Survey 或真实使用、留存、复购和推荐证据'], '补充 PMF Survey、真实使用证据和来源，不把 40% 当成结论')
+  const northStar = dimension('northStar', 'North Star 与驱动因素', auditScore(audits, 'northStar'), auditEvidence(audits, 'northStar'), ['North Star、驱动因素、基线、目标和统计周期'], '确定一个 North Star，并拆出 3—5 个可行动驱动因素')
+  const aarrr = dimension('aarrr', 'AARRR 口径', auditScore(audits, 'aarrr'), auditEvidence(audits, 'aarrr'), ['五个阶段的事件、分子、分母、时间窗口和目标'], '为当前关注的 AARRR 阶段补齐事件、分子、分母和目标')
+  const metrics = dimension('metrics', '指标与证据', auditScore(audits, 'metrics'), auditEvidence(audits, 'metrics'), ['公式、数据来源、样本量、时间范围和缺失值规则'], '把关键指标写入指标字典，并绑定来源、时间范围和样本量')
+  const experimentation = dimension('experimentation', '实验条件', auditScore(audits, 'experimentation'), auditEvidence(audits, 'experimentation'), ['可证伪假设、主指标、护栏指标、负责人和停止条件'], '把最高优先级问题转成带主指标、护栏指标和负责人的 HADI 实验')
+  const operations = metadataDimension(notes)
+  const dimensions = [jtbd, pmf, northStar, aarrr, metrics, data.dimension, experimentation, operations]
+  const scores = dimensions.map((item) => item.score).filter((score): score is number => score !== null)
+  const overallScore = scores.length === 0 ? 0 : Math.round(scores.reduce((sum, score) => sum + score, 0) / dimensions.length)
+  const missingOrPartial = dimensions.filter((item) => item.status === 'missing' || item.status === 'partial').length
+  const overallStatus: GrowthOnboardingResult['overallStatus'] = overallScore === 0 ? 'blocked' : missingOrPartial === 0 ? 'ready' : 'partial'
+
+  const methods: OnboardingMethod[] = [
+    methodFromDimension('jtbd', 'JTBD / ICP', 'audit', jtbd),
+    methodFromDimension('pmf', 'PMF Survey', 'template', pmf),
+    methodFromDimension('northStar', 'North Star / Driver Tree', 'audit', northStar),
+    methodFromDimension('aarrr', 'AARRR Funnel', 'analysis', aarrr),
+    {
+      id: 'cohort',
+      name: 'Cohort / Retention',
+      pluginCapability: 'analysis',
+      projectStatus: data.eventProfiles.some((profile) => inferStages(profile).some((stage) => stage.name === 'Retention')) ? 'ready' : data.eventProfiles.length > 0 ? 'partial' : 'missing',
+      evidence: data.eventProfiles.slice(0, 3).map((profile) => `${profile.source}: ${inferStages(profile).map((stage) => stage.name).join(', ')}`),
+      nextAction: data.eventProfiles.length === 0 ? '补充带用户、事件和时间字段的事件数据' : '确认留存事件、队列周期和分群口径',
+    },
+    {
+      id: 'economics',
+      name: 'MRR / Unit Economics',
+      pluginCapability: 'analysis',
+      projectStatus: data.economicsProfiles.length > 0 ? 'ready' : 'missing',
+      evidence: data.economicsProfiles.slice(0, 3).map((profile) => `${profile.source}: period/type/amount detected`),
+      nextAction: data.economicsProfiles.length === 0 ? '补充 MRR movement、active_customers、spend 和 gross margin 口径' : '确认 amountMode、movementSource、gross margin 和期初 MRR',
+    },
+    methodFromDimension('hadi', 'HADI Experiments', 'analysis', experimentation),
+    {
+      id: 'rice',
+      name: 'RICE / ICE',
+      pluginCapability: 'analysis',
+      projectStatus: signalStatus(text, /\bRICE\b|\bICE\b/i),
+      evidence: signalStatus(text, /\bRICE\b|\bICE\b/i) === 'ready' ? ['A priority method is mentioned in the growth notes'] : [],
+      nextAction: '为候选实验补充 reach、impact、confidence、effort 或 ease，并标注证据与估计值',
+    },
+    {
+      id: 'growth-loops',
+      name: 'Growth Loops',
+      pluginCapability: 'documentation',
+      projectStatus: signalStatus(text, /growth loop|增长循环|增长飞轮/i),
+      evidence: signalStatus(text, /growth loop|增长循环|增长飞轮/i) === 'ready' ? ['A loop is mentioned in the growth notes'] : [],
+      nextAction: '如果增长依赖循环，补充输入、动作、输出、回流点和限制条件',
+    },
+    {
+      id: 'operating-review',
+      name: 'WBR / MBR / QBR',
+      pluginCapability: 'analysis',
+      projectStatus: signalStatus(text, /\bWBR\b|\bMBR\b|\bQBR\b/i),
+      evidence: signalStatus(text, /\bWBR\b|\bMBR\b|\bQBR\b/i) === 'ready' ? ['An operating review is mentioned in the growth notes'] : [],
+      nextAction: '用 growth_report 生成一次只读预览，并绑定指标、发现、实验、行动和 caveats',
+    },
+    {
+      id: 'causal-inference',
+      name: '因果推断 / 实验统计',
+      pluginCapability: 'not-supported',
+      projectStatus: 'not-applicable',
+      evidence: ['当前插件不计算显著性、贝叶斯结果或因果效应'],
+      nextAction: '需要严格实验统计时，使用外部实验平台或统计分析流程，并把结果作为证据来源接入',
+    },
+    {
+      id: 'market-pricing',
+      name: '市场规模 / 竞品 / 定价',
+      pluginCapability: 'not-supported',
+      projectStatus: 'not-applicable',
+      evidence: ['当前插件不连接市场、竞品、CRM 或广告平台数据'],
+      nextAction: '先在外部研究或业务文档中完成，再把结论和来源带回增长项目笔记',
+    },
+  ]
+
+  const actionCandidates = dimensions
+    .filter((item) => item.status === 'missing' || item.status === 'partial')
+    .toSorted((left, right) => (left.status === 'missing' ? 0 : 1) - (right.status === 'missing' ? 0 : 1))
+    .map((item) => item.nextAction)
+  const topActions = [...new Set(actionCandidates)].slice(0, 2)
+  const questions: string[] = []
+  if (jtbd.status !== 'ready') questions.push('产品服务谁？用户在什么场景下想完成什么进步？')
+  if (data.eventProfiles.length === 0) questions.push('哪一份事件数据可以代表注册、激活或留存？')
+  if (data.economicsProfiles.length === 0) questions.push('本轮是否需要分析收入和获客成本？如果需要，请提供 MRR / 成本数据。')
+  if (questions.length < 3 && northStar.status !== 'ready') questions.push('当前最能代表用户获得价值的一个 North Star 指标是什么？')
+
+  const warnings = [...new Set([
+    ...input.datasetWarnings,
+    ...input.scanErrors,
+    ...(input.skippedFiles && input.skippedFiles > 0 ? [`${input.skippedFiles} file(s) were skipped because of scan limits`] : []),
+    ...(notes.length === 0 ? ['No growth Markdown note was found; strategy readiness is based on missing evidence, not a product judgment'] : []),
+  ])]
+  return {
+    generatedAt: new Date().toISOString(),
+    root: input.root,
+    overallStatus,
+    overallScore,
+    sources: {
+      growthNotes: notes.length,
+      datasets: profiles.length,
+      eventDatasets: data.eventProfiles.map((profile) => profile.source),
+      economicsDatasets: data.economicsProfiles.map((profile) => profile.source),
+      notes: notes.slice(0, 20).map((item) => ({ path: item.note.path, title: item.note.title, readiness: item.audit.readiness.overall, missingMetadata: item.missingMetadata })),
+    },
+    dimensions,
+    methods,
+    topActions,
+    questions: questions.slice(0, 3),
+    warnings,
+  }
+}
+
+export async function collectOnboardingProfiles(
+  fs: FileSystemLike,
+  config: GrowthConfig,
+  root: string,
+  signal?: AbortSignal,
+  growthData?: {
+    doctor(root: string, signal?: AbortSignal): Promise<{ datasets: Array<{ path: string; status: string; warnings: string[] }>; checks: Array<{ status: string; message: string }> }>
+    readDataset(path: string, signal?: AbortSignal): Promise<{ rows: import('./types.js').Row[]; warnings: string[] }>
+    profileDataset(path: string, rows: import('./types.js').Row[]): DatasetProfile
+  },
+): Promise<{ profiles: DatasetProfile[]; warnings: string[] }> {
+  const health = await (growthData?.doctor(root, signal) ?? doctorRoot(fs, root, config, signal))
+  const warnings = [
+    ...health.checks.filter((check) => check.status === 'warning').map((check) => `Data scan: ${check.message}`),
+  ]
+  const profiles: DatasetProfile[] = []
+  for (const summary of health.datasets) {
+    if (summary.status === 'error') continue
+    try {
+      const dataset = await (growthData?.readDataset(summary.path, signal) ?? readDataset(fs, config, summary.path, signal))
+      const profile = growthData?.profileDataset(summary.path, dataset.rows) ?? profileDataset(summary.path, dataset.rows)
+      profile.quality.warnings = [...new Set([...profile.quality.warnings, ...dataset.warnings, ...summary.warnings])]
+      profiles.push(profile)
+    } catch (error) {
+      warnings.push(`Data scan skipped '${summary.path}': ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  return { profiles, warnings }
+}

@@ -5,7 +5,8 @@
 ## 使用顺序
 
 ```text
-JTBD / ICP
+增长准备度检查
+→ JTBD / ICP
 → PMF 信号
 → North Star 与驱动因素
 → AARRR 漏斗
@@ -15,6 +16,8 @@ JTBD / ICP
 → RICE / ICE 排序
 → WBR / MBR 复盘
 ```
+
+`growth_onboarding` 先检查准备度和方法覆盖；只有在目标、证据和数据基础满足后，才进入下面的增长闭环。
 
 ## JTBD
 

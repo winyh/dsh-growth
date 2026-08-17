@@ -30,6 +30,7 @@
 
 ## 核心能力
 
+- `growth_onboarding`：只读检查增长项目准备度，汇总策略笔记、数据基础、经典方法覆盖和前两个缺口
 - `growth_doctor`：分析前检查本地目录、数据文件和质量风险
 - `growth_profile_dataset`：推断字段、覆盖率、日期范围和质量警告，不返回原始行
 - `growth_review`：从业务目标出发，编排画像、分析、瓶颈和下一步行动；可以省略路径，自动发现本地数据
@@ -53,16 +54,63 @@ npx --yes @deepseek-ai/dsh plugin --profile growth add dsh-growth
 npx --yes @deepseek-ai/dsh --profile growth --dump-config
 ```
 
+如果 Harness 宿主还没有启动，先启动 Web UI：
+
+```bash
+npx --yes @deepseek-ai/dsh web
+```
+
+然后打开 `http://127.0.0.1:3080`，选择 `growth` profile 开始对话。DeepSeek Harness 官方仓库说明了这个 Web UI 入口；宿主目前仍在 developer preview，命令可能随版本调整。
+
 如果 `dsh` 已经在系统 `PATH` 中，也可以使用简写：`dsh plugin --profile growth add dsh-growth`。
 
 ```yaml
-defaultRoot: D:\ObsidianData
+defaultRoot: "<your-local-growth-root>"
 reportDir: .dsh-growth/reports
 defaultCurrency: CNY
 defaultTimezone: Asia/Shanghai
 ```
 
 插件默认只读本地文件，不上传知识库，不自动发消息，不修改 CRM，不自动投放广告。外部 API 连接只作为后续可选的只读能力。
+
+## 零门槛使用（推荐）
+
+第一次使用不需要记住工具名、AARRR 定义、字段映射，也不需要先判断哪个文件最重要。只需要三件事：
+
+1. 一个业务问题，例如“为什么激活率下降？”或“哪个获客渠道值得扩大？”；
+2. 已配置的本地增长目录；如果知道文件，也可以直接提供文件名；
+3. 允许插件读取本地数据。插件不会上传知识库。
+
+如果是新项目，建议先做一次准备度检查：
+
+```text
+检查我的增长项目准备度。
+告诉我哪些已具备、部分具备、缺失或暂不支持，并且只给我接下来最应该补齐的两个缺口；不要写入文件。
+```
+
+它会只读检查增长笔记和本地 CSV、JSON、JSONL 数据，不返回原始用户行；同时告诉你哪些经典方法已经在项目中出现、哪些目前只有审计或模板能力、哪些需要外部系统支持。如果你已经明确目标并希望直接分析，可以直接使用 `growth_review`。
+
+最短的第一句复盘请求是：
+
+```text
+以“提升激活率”为目标，使用配置目录中最合适的数据复盘。
+告诉我选了哪些文件、缺什么、最大瓶颈和下一步检查；不要写入文件。
+```
+
+如果不提供路径，`growth_review` 会扫描配置目录中的 CSV、JSON、JSONL 文件，分析字段和质量，自动选择最适合做事件分析与 MRR 分析的数据，并解释选择理由。如果发现多个候选文件，应先确认文件，再做预算或产品决策。
+
+### 新手推荐的六步对话
+
+```text
+1. 检查我的增长项目准备度，告诉我哪些已具备、部分具备、缺失或暂不支持。
+2. 以“提升激活率”为目标复盘，先告诉我缺什么，再给结论。
+3. 按渠道和分群拆解瓶颈，区分证据和假设。
+4. 把最高杠杆的假设转成 HADI 实验，加入主指标和护栏指标。
+5. 用 RICE 排序，并说明哪些输入是估计值而不是事实。
+6. 生成本周 WBR，只预览，不写文件。
+```
+
+你只需要替换业务目标和文件名，不需要改变流程。高级用户可以直接指定工具和参数，但不是必需的。
 
 ## 典型用法
 
@@ -98,6 +146,19 @@ defaultTimezone: Asia/Shanghai
 
 工具结果统一包含 `ok`、`data`、`warnings`、`assumptions`、`lineage` 和 `nextActions`。使用数字做决策前，必须先阅读 `warnings` 和 `lineage`。
 
+### 如何阅读结果
+
+| 字段 | 含义 | 用户应该怎么做 |
+| --- | --- | --- |
+| `ok` | 工具是否完成 | 为 false 时先修复错误 |
+| `data` | 分析结果或 Markdown 报告 | 先读其他字段，再使用其中的数字 |
+| `warnings` | 数据质量风险和限制 | 必须和结论一起阅读 |
+| `assumptions` | 默认值或自动选择的数据源 | 做决策前确认是否合理 |
+| `lineage` | 来源文件、字段和时间窗口 | 用来追溯重要数字 |
+| `nextActions` | 下一步检查或行动 | 指定负责人和决策日期 |
+
+`null` 表示“当前数据不足以可信计算”，不是零。例如缺少 spend 时 CAC 和 Payback 会保持不可用，缺少期初 MRR 时首期增长率和 NRR 会标记为部分可用。
+
 ### 数据字段示例
 
 ```csv
@@ -108,6 +169,41 @@ u001,retained,2026-08-08T09:20:00Z,content,team
 ```
 
 分析结果中的 `warnings` 必须一并阅读：缺失金额、投放成本、活跃客户数或起始 MRR 不会被静默当作零，相关指标会保持不可用并明确说明原因。
+
+### 常见数据准备方式
+
+事件数据最少可以只有三个字段：
+
+```csv
+user_id,event,timestamp
+u001,注册,2026-08-01T09:00:00Z
+u001,激活,2026-08-01T09:20:00Z
+u001,活跃,2026-08-08T09:20:00Z
+```
+
+需要 MRR 和获客成本时，再提供实际拥有的字段：
+
+```csv
+period,type,amount,customer_id,active_customers,spend,currency
+2026-08,new,1000,c001,20,5000,CNY
+2026-08,expansion,200,c002,20,,CNY
+2026-08,churned,100,c003,20,,CNY
+```
+
+不要为了通过检查而编造缺失字段。插件会保留相关指标不可用，并告诉你需要补什么。
+
+### 常见问题怎么处理
+
+| 看到的情况 | 代表什么 | 下一句话怎么说 |
+| --- | --- | --- |
+| 找不到可用数据 | 配置目录没有支持的文件或字段无法识别 | `检查我的增长目录，告诉我缺少哪个文件或字段。` |
+| 自动选了多个候选文件 | 找到了多个可能的数据源 | `事件使用 events-prod.csv，收入使用 mrr-2026.csv。` |
+| 漏斗阶段少于两个 | 事件名未识别或事件数据不完整 | `分析 events.csv 的事件值，并按 signup=注册、activation=激活 指定阶段。` |
+| CAC / LTV / Payback 是 `null` | 缺少 spend、活跃客户、毛利率或流失证据 | `告诉我计算 CAC、LTV、Payback 还需要哪些准确字段。` |
+| NRR 或 MRR 增长是部分结果 | 缺少期初 MRR 或 movement 金额 | `告诉我哪些周期和 movement 行导致 MRR Bridge 不完整。` |
+| 写入被拒绝 | 路径越界、不是 Markdown，或预览后文件被修改 | `重新预览报告，并给我一个增长目录下的安全写入路径。` |
+
+如果安装后看不到 `growth_review`，请重新安装插件并新建一个 Harness / Codex 对话，让宿主重新加载插件工具清单。
 
 ## 开发
 

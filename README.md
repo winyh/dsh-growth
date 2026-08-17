@@ -34,6 +34,7 @@ Growth work often breaks down in the gap between data, decisions and execution:
 
 | Tool | Purpose |
 |---|---|
+| `growth_onboarding` | Run a read-only readiness check across strategy notes and datasets; show ready, partial, missing and unsupported methods |
 | `growth_doctor` | Check the local workspace and summarize dataset health before analysis |
 | `growth_profile_dataset` | Infer fields, coverage, date range and data-quality warnings without raw rows |
 | `growth_review` | Start from a business goal and orchestrate profiling, analysis, bottleneck and next actions; paths may be omitted for local auto-discovery |
@@ -50,12 +51,46 @@ Growth work often breaks down in the gap between data, decisions and execution:
 
 ## Quick start
 
+### Zero-threshold path
+
+You do not need to know the tool names, AARRR definitions, field mappings or which dataset to open first. You only need:
+
+1. A business question, such as “why did activation fall?” or “which acquisition channel should we scale?”
+2. A configured local growth root, or a file path if you already know the relevant file.
+3. Permission to read local data; the plugin does not upload your vault.
+
+For a new project, start with a readiness check:
+
+```text
+Run a growth onboarding check for my configured root.
+Tell me what is ready, partial, missing and not supported, and give me only the top two gaps to fix next. Do not write files.
+```
+
+It checks growth notes and local CSV/JSON/JSONL datasets without returning raw user rows. It also shows which classic methods are detected in the project, which are only available as audits or templates, and which require an external system. If you already know the goal and want analysis immediately, use `growth_review` instead.
+
+The shortest first review request is:
+
+```text
+Run a growth review for the goal "improve activation" using the best available data under my configured root.
+Show me which files you selected, what is missing, the biggest bottleneck and the next check. Do not write files.
+```
+
+If no paths are supplied, `growth_review` scans the configured root, profiles supported CSV/JSON/JSONL files, selects the most analysis-ready event and MRR sources, and explains the selection. If there are several candidates, confirm the selected files before making a budget or product decision.
+
 Install the plugin into a DeepSeek Harness profile:
 
 ```bash
 npx --yes @deepseek-ai/dsh plugin --profile growth add dsh-growth
 npx --yes @deepseek-ai/dsh --profile growth --dump-config
 ```
+
+If the Harness host is not running yet, start its Web UI first:
+
+```bash
+npx --yes @deepseek-ai/dsh web
+```
+
+Then open `http://127.0.0.1:3080` in your browser and use the `growth` profile. DeepSeek Harness's official repository documents this Web UI entry point; the host is in developer preview, so its setup commands may evolve.
 
 If `dsh` is already on your `PATH`, the equivalent short form is `dsh plugin --profile growth add dsh-growth`.
 
@@ -80,6 +115,21 @@ Turn the largest activation bottleneck into a HADI experiment and score it with 
 Generate this week's WBR as Markdown; do not write a file yet.
 ```
 
+### The recommended conversation flow
+
+Use these six requests in order when you are new to the plugin:
+
+```text
+1. Run a growth onboarding check; tell me what is ready, partial, missing and not supported.
+2. Review the goal "improve activation" and tell me what is missing before giving a conclusion.
+3. Break down the bottleneck by channel and segment; separate evidence from hypotheses.
+4. Turn the highest-leverage hypothesis into a HADI experiment with a primary metric and guardrails.
+5. Score the experiment with RICE and show which inputs are estimates rather than observed facts.
+6. Generate this week's WBR; preview only and do not write a file.
+```
+
+You can replace the goal and the file names without changing the workflow. Advanced users may call the individual tools directly, but that is optional.
+
 Tool results use a stable envelope with `ok`, `data`, `warnings`, `assumptions`, `lineage` and `nextActions`. Read `warnings` and `lineage` before using a number in a decision.
 
 ### Input conventions
@@ -89,6 +139,43 @@ The goal-oriented review recognizes common English and Chinese event values such
 
 For the first review, `eventPath` and `economicsPath` can be omitted. `growth_review` scans the configured local root, selects the most analysis-ready event and MRR files, and records the selected sources in `assumptions`, `warnings` and `lineage`. If more than one file is suitable, confirm the selection before using the result for a budget or product decision.
 
+### Minimal data examples
+
+An event file can start with only these three fields:
+
+```csv
+user_id,event,timestamp
+u001,signup,2026-08-01T09:00:00Z
+u001,activated,2026-08-01T09:20:00Z
+u001,active,2026-08-08T09:20:00Z
+```
+
+For MRR and acquisition cost analysis, add the fields you actually have:
+
+```csv
+period,type,amount,customer_id,active_customers,spend,currency
+2026-08,new,1000,c001,20,5000,CNY
+2026-08,expansion,200,c002,20,,CNY
+2026-08,churned,100,c003,20,,CNY
+```
+
+Do not fabricate missing columns. The plugin will keep dependent metrics unavailable and explain what needs to be added.
+
+### How to read a result
+
+Every tool returns the same outer structure:
+
+| Field | Meaning | What you should do |
+| --- | --- | --- |
+| `ok` | Whether the tool completed | Stop if false; correct the reported error |
+| `data` | Analysis or Markdown report | Read only after checking the other fields |
+| `warnings` | Data-quality risks and limitations | Treat as part of the result, not as decoration |
+| `assumptions` | Defaults or automatic source selection | Confirm before using the result for a decision |
+| `lineage` | Source files, fields and time windows | Use it to trace every important number |
+| `nextActions` | Concrete next checks or actions | Pick one owner and one decision date |
+
+`null` means “not available or not trustworthy with the supplied data”; it is not zero. For example, missing spend leaves CAC and payback unavailable, and missing beginning MRR leaves first-period growth and NRR partial.
+
 ### Safe write workflow
 
 Reports are returned as Markdown and are not written automatically. When updating an existing Markdown file:
@@ -97,6 +184,19 @@ Reports are returned as Markdown and are not written automatically. When updatin
 2. Review the preview and call it again with the same content and `confirm=true` only after approval.
 
 Writes stay inside `defaultRoot` and use a version guard to avoid overwriting concurrent edits. Read `warnings` before interpreting analytical results; missing amounts, spend, active-customer counts and beginning MRR remain unavailable instead of being silently treated as zero.
+
+### Troubleshooting without technical knowledge
+
+| What you see | What it means | What to ask next |
+| --- | --- | --- |
+| No usable dataset found | The configured root has no supported or recognizable data | `Check my configured growth root and tell me what file and field is missing.` |
+| Multiple event/MRR files selected | The plugin found more than one plausible source | `Use events-prod.csv for events and mrr-2026.csv for economics.` |
+| Fewer than two funnel stages | Event names were not recognized or the event file is incomplete | `Profile events.csv and show the event values; use these explicit stages: signup=注册, activation=激活.` |
+| CAC/LTV/Payback is `null` | Spend, active customers, gross margin or churn evidence is missing | `List the exact inputs needed to calculate CAC, LTV and Payback.` |
+| NRR or MRR growth is partial | Beginning MRR or movement amounts are missing | `Tell me which periods and movement rows prevent a complete MRR bridge.` |
+| Write was rejected | The target is outside the root, not Markdown, or changed since preview | `Preview the report again and show the safe path under my growth root.` |
+
+If the installed plugin does not expose `growth_review`, start a new Harness/Codex thread after reinstalling the plugin so the new tool manifest is loaded.
 
 ## Defaults
 

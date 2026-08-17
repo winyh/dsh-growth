@@ -1,6 +1,6 @@
 {
   "name": "dsh-growth",
-  "version": "0.1.0+codex.20260814085345",
+  "version": "0.1.0+codex.20260817013415",
   "description": "Evidence-backed growth analysis tools for AARRR funnels, retention, experiments and MRR.",
   "author": {
     "name": "Local developer"
@@ -26,6 +26,7 @@
       "Write"
     ],
     "defaultPrompt": [
+      "Run a read-only growth onboarding check for my project; show what is ready, partial, missing and not supported, then give me only the top two gaps to fix.",
       "Run a growth review for my goal using the best available local data; show which sources you selected and what is missing.",
       "Audit this growth plan and find the biggest evidence gaps.",
       "Analyze my AARRR funnel and identify the highest-leverage bottleneck.",

@@ -14,6 +14,7 @@ import { renderReport } from './reports.js'
 import { resultEnvelope, renderResult, resultSchema } from './output.js'
 import { buildReview, inferStages, selectReviewSources } from './review.js'
 import { doctorRoot, profileDataset } from './quality.js'
+import { buildGrowthOnboarding, collectOnboardingNotes, collectOnboardingProfiles } from './onboarding.js'
 import type { GrowthDataServiceApi } from './service.js'
 import { readNote, scanGrowthVault } from './vault.js'
 import type { ResultLineage } from './output.js'
@@ -284,6 +285,44 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
       if (args.includeDatasets === false) result.datasets = []
       emitAnalysisCompleted(ctx, 'doctor', [root], result.summary.warnings + result.summary.errors)
       return wrapResult(result, { lineage: [{ source: root }], nextActions: result.nextActions })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'growth_onboarding',
+    description: 'Run a read-only growth readiness check across local strategy notes and datasets. Reports what is ready, partial, missing or not supported, including classic method coverage and the top two gaps to fix next.',
+    parameters: {
+      root: { type: 'string', description: 'Optional project directory under defaultRoot; defaults to defaultRoot.' },
+      notePath: { type: 'string', description: 'Optional Markdown strategy note to audit instead of scanning all growth notes under root.' },
+    },
+    output: growthOutput(config.maxResultChars),
+    async execute(args, exec) {
+      const root = args.root?.trim() || config.defaultRoot
+      await ensureInsideRoot(fs, config, root, exec.signal)
+      if (args.notePath?.trim()) {
+        await ensureInsideRoot(fs, config, args.notePath, exec.signal)
+        const rootTarget = await fs.resolve(root, { signal: exec.signal })
+        const noteTarget = await fs.resolve(args.notePath, { signal: exec.signal })
+        if (!fs.contains(rootTarget, noteTarget)) throw new Error(`notePath must be inside root: ${args.notePath}`)
+      }
+      emitAnalysisStarted(ctx, 'onboarding', [root, ...(args.notePath?.trim() ? [args.notePath.trim()] : [])])
+      const notes = await collectOnboardingNotes(fs, root, config, exec.signal, args.notePath?.trim() || undefined)
+      const datasets = await collectOnboardingProfiles(fs, config, root, exec.signal, growthData)
+      const result = buildGrowthOnboarding({
+        root,
+        notes: notes.notes,
+        profiles: datasets.profiles,
+        datasetWarnings: datasets.warnings,
+        scanErrors: notes.errors,
+        skippedFiles: notes.skippedFiles,
+      })
+      emitAnalysisCompleted(ctx, 'onboarding', [root], result.warnings.length)
+      result.warnings.forEach((message) => ctx.emit('growth/warning', { kind: 'onboarding', source: root, message }))
+      return wrapResult(result, {
+        lineage: [{ source: root }, ...(args.notePath?.trim() ? [{ source: args.notePath.trim() }] : [])],
+        assumptions: ['Readiness is based on detected local evidence; an undetected method is not proof that the team has never used it.', 'Not-supported methods require an external research, experiment or execution system.'],
+        nextActions: result.topActions,
+      })
     },
   }))
 

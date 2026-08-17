@@ -52,6 +52,46 @@ export interface GrowthAuditResult {
   missingFields: string[]
 }
 
+export type ReadinessStatus = 'ready' | 'partial' | 'missing' | 'not-detected' | 'not-applicable'
+
+export interface OnboardingDimension {
+  id: string
+  label: string
+  status: ReadinessStatus
+  score: number | null
+  evidence: string[]
+  missing: string[]
+  nextAction: string
+}
+
+export interface OnboardingMethod {
+  id: string
+  name: string
+  pluginCapability: 'analysis' | 'audit' | 'template' | 'documentation' | 'not-supported'
+  projectStatus: ReadinessStatus
+  evidence: string[]
+  nextAction?: string
+}
+
+export interface GrowthOnboardingResult {
+  generatedAt: string
+  root: string
+  overallStatus: 'ready' | 'partial' | 'blocked'
+  overallScore: number
+  sources: {
+    growthNotes: number
+    datasets: number
+    eventDatasets: string[]
+    economicsDatasets: string[]
+    notes: Array<{ path: string; title: string; readiness: number; missingMetadata: string[] }>
+  }
+  dimensions: OnboardingDimension[]
+  methods: OnboardingMethod[]
+  topActions: string[]
+  questions: string[]
+  warnings: string[]
+}
+
 export interface GrowthScanResult {
   root: string
   generatedAt: string
