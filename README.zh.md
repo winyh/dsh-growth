@@ -2,7 +2,7 @@
 
 [English](README.md) · 中文
 
-`dsh-growth` 是一个本地优先的 DeepSeek Harness 插件，用于把 Markdown、CSV 和 JSONL 中的增长资料与业务数据，转化为可解释的增长诊断和执行任务。
+`dsh-growth` 是一个本地优先的 DeepSeek Harness 插件，用于把 Markdown、CSV 和 JSONL 中的增长资料与业务数据，转化为可解释的增长诊断、落地方案和执行 SOP。
 
 ## 用户与公司的痛点需求
 
@@ -30,7 +30,7 @@
 
 ## 核心能力
 
-- `growth_onboarding`：只读检查增长项目准备度，汇总策略笔记、数据基础、经典方法覆盖和前两个缺口
+- `growth_onboarding`：只读检查增长项目准备度，汇总策略笔记、数据基础、经典方法覆盖、当前 SOP 关卡和前两个缺口
 - `growth_doctor`：分析前检查本地目录、数据文件和质量风险
 - `growth_profile_dataset`：推断字段、覆盖率、日期范围和质量警告，不返回原始行
 - `growth_review`：从业务目标出发，编排画像、分析、瓶颈和下一步行动；可以省略路径，自动发现本地数据
@@ -44,6 +44,10 @@
 - RICE / ICE 优先级排序
 - WBR / MBR / QBR 增长复盘
 - 预览后、安全写入 Obsidian Markdown
+
+可选的 `growth-acquisition-execution` skill 还提供外部渠道资源和受质量门控制的目录提交规划 SOP；它只负责资源筛选、方案设计、授权清单和交接模板，不浏览网站、不创建账号、不填写表单、不执行外部提交。
+
+可选的 `growth-ai-discoverability` skill 提供“AI 搜索 / 可发现性准备度”方法，用于判断可抓取性、结构化事实、内容可信度和商品 Feed 检查项是否适用于当前业务。它只输出准备度矩阵和落地方案，不扫描或修改网站，也不依赖 GEO-PRO。
 
 ## 默认配置
 
@@ -112,6 +116,23 @@ defaultTimezone: Asia/Shanghai
 
 你只需要替换业务目标和文件名，不需要改变流程。高级用户可以直接指定工具和参数，但不是必需的。
 
+### 标准 SOP：六道决策门
+
+不要把工具名当成流程。每一关满足退出条件后再进入下一关：
+
+| 决策门 | 未满足前不能继续 | 下一步 |
+|---|---|---|
+| 问题与价值 | 目标用户、JTBD、North Star、目标指标和周期不清楚 | 补齐增长上下文 |
+| 数据与口径 | 来源、字段映射、质量警告和缺失字段不清楚 | 修复或确认数据 |
+| 瓶颈诊断 | 瓶颈没有绑定指标和来源，事实与假设混在一起 | 按漏斗、队列、渠道或收入拆解 |
+| HADI 实验 | 没有主指标、护栏、负责人和停止条件 | 准备实验 |
+| 机会排序 | RICE / ICE 输入没有证据，或估计值未标明 | 选择下一项机会 |
+| 复盘与回写 | 报告没有来源、限制、负责人和决策日期 | 先预览，再确认写入 |
+
+任何一关失败，只追问最小缺口并停在当前关卡。不要编造指标、把相关性当因果，也不要在预览前写入报告。
+
+实际分析工具由 DeepSeek Harness / Cordis 宿主注册。Codex 插件可能只加载 `growth-operator` 使用说明，并不代表 Cordis 工具已经可调用；必须先确认宿主的可调用工具列表中出现 `growth_onboarding`，才能认为安装真正可用。
+
 ## 典型用法
 
 第一次使用时，建议先从目标导向入口开始：
@@ -145,6 +166,30 @@ defaultTimezone: Asia/Shanghai
 第一次复盘可以省略 `eventPath` 和 `economicsPath`。`growth_review` 会扫描配置的本地目录，选择最适合做事件分析和 MRR 分析的文件，并把选择结果写入 `assumptions`、`warnings` 和 `lineage`。如果发现多个候选文件，应先确认选择，再据此做预算或产品决策。
 
 工具结果统一包含 `ok`、`data`、`warnings`、`assumptions`、`lineage` 和 `nextActions`。使用数字做决策前，必须先阅读 `warnings` 和 `lineage`。
+
+### 外部获客方案与提交 SOP
+
+如果要筛选产品目录、AI 工具导航或其他发现渠道，可以这样开始：
+
+```text
+使用 $growth-acquisition-execution，为我们的目标市场筛选相关产品目录渠道。
+先读取本地候选资源，列出当前入口和条款的核验清单，完成质量门；最多设计 10 个试点站点方案，
+只输出逐站授权清单和人工交接步骤，不浏览网站、不执行提交。说明未来如何把推荐访问和激活结果接回增长复盘。
+```
+
+该 skill 区分质量试点方案和已审核批量方案；不会执行外部网站操作，不会绕过 CAPTCHA 或邮箱验证，不会编造产品资料，也不会把提交数量当成增长效果。
+
+### AI 搜索可发现性方案
+
+如果要判断产品是否适合 AI 搜索、AI 产品发现或 LLM 可理解性准备，可以这样开始：
+
+```text
+使用 $growth-ai-discoverability，评估我们的产品是否适合 AI 搜索和产品发现准备。
+先判断业务类型和目标，再按可抓取性、机器可理解事实、内容可信度和商品 Feed 适用性建立准备度矩阵；
+只输出缺口、负责人、验收标准和验证指标，不扫描网站、不修改代码。
+```
+
+它会区分通用搜索基础和平台专属建议；没有站点或工程证据时标记为 `needs-external-validation`，不会承诺排名、收录、AI 引用或转化。
 
 ### 如何阅读结果
 
@@ -203,7 +248,7 @@ period,type,amount,customer_id,active_customers,spend,currency
 | NRR 或 MRR 增长是部分结果 | 缺少期初 MRR 或 movement 金额 | `告诉我哪些周期和 movement 行导致 MRR Bridge 不完整。` |
 | 写入被拒绝 | 路径越界、不是 Markdown，或预览后文件被修改 | `重新预览报告，并给我一个增长目录下的安全写入路径。` |
 
-如果安装后看不到 `growth_review`，请重新安装插件并新建一个 Harness / Codex 对话，让宿主重新加载插件工具清单。
+如果可调用工具列表中没有 `growth_onboarding` 或 `growth_review`，不要把 skill 说明当成工具已加载。请重新安装插件并在 DeepSeek Harness / Cordis 中新建会话；如果目标是 Codex，则还需要 MCP 适配层才能暴露 Cordis 工具。
 
 ## 开发
 

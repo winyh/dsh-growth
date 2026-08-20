@@ -2,7 +2,7 @@
 
 [中文](README.zh.md) · English
 
-`dsh-growth` is a local-first DeepSeek Harness bundle for evidence-backed user growth and customer acquisition analysis.
+`dsh-growth` is a local-first DeepSeek Harness bundle for evidence-backed user growth and customer acquisition analysis, actionable plans and execution SOPs.
 
 It covers AARRR funnels, activation, retention cohorts, referral loops, MRR bridges, CAC/LTV/payback, HADI experiments, RICE prioritization and WBR/MBR reports for Markdown, CSV and JSONL data.
 
@@ -29,12 +29,13 @@ Growth work often breaks down in the gap between data, decisions and execution:
 | Retention improvement | Build day/week/month cohorts, inspect lifecycle states and compare user segments. |
 | SaaS or subscription monetization | Reconcile MRR movements and calculate ARR, NRR, CAC, LTV and payback. |
 | Growth operating cadence | Produce weekly/monthly reviews with findings, decisions, caveats and next actions. |
+| External acquisition | Screen product directories and discovery channels, run a quality-gated pilot, and connect verified referrals back to AARRR. |
 
 ## Included tools
 
 | Tool | Purpose |
 |---|---|
-| `growth_onboarding` | Run a read-only readiness check across strategy notes and datasets; show ready, partial, missing and unsupported methods |
+| `growth_onboarding` | Run a read-only readiness check across strategy notes and datasets; show ready, partial, missing and unsupported methods, the current SOP gate and the top two gaps |
 | `growth_doctor` | Check the local workspace and summarize dataset health before analysis |
 | `growth_profile_dataset` | Infer fields, coverage, date range and data-quality warnings without raw rows |
 | `growth_review` | Start from a business goal and orchestrate profiling, analysis, bottleneck and next actions; paths may be omitted for local auto-discovery |
@@ -48,6 +49,10 @@ Growth work often breaks down in the gap between data, decisions and execution:
 | `growth_prioritize` | Rank growth opportunities with RICE or ICE |
 | `growth_report` | Generate WBR, MBR, QBR or experiment-review Markdown |
 | `growth_apply` | Preview or guarded-write Markdown under the configured root |
+
+The optional `growth-acquisition-execution` skill adds external channel resources and a controlled directory-submission planning SOP. It is intentionally separate from deterministic metric tools because live site rules, browser state and human verification change over time. It only qualifies resources, prepares plans and handoffs; it does not browse, create accounts, fill forms or submit to external sites.
+
+The optional `growth-ai-discoverability` skill adds an AI Search / Discoverability Readiness method for deciding which crawlability, structured-data, content-trust and commerce-feed checks apply to a business. It produces a readiness matrix and implementation plan; it does not scan or modify websites and does not depend on GEO-PRO.
 
 ## Quick start
 
@@ -130,7 +135,50 @@ Use these six requests in order when you are new to the plugin:
 
 You can replace the goal and the file names without changing the workflow. Advanced users may call the individual tools directly, but that is optional.
 
+### The operating SOP
+
+Treat the workflow as six decision gates, not as a list of tools:
+
+| Gate | Do not move on until | Next action |
+|---|---|---|
+| Context | The target user, JTBD, North Star, target metric and period are explicit | Complete the growth context |
+| Measurement | The source, field mapping, quality warnings and missing fields are known | Repair or confirm the dataset |
+| Diagnosis | The bottleneck is tied to a metric and sources; facts are separated from hypotheses | Break down by funnel, cohort, channel or economics |
+| Experiment | The HADI card has a primary metric, guardrails, owner and stop criteria | Prepare the test |
+| Priority | RICE/ICE inputs are evidence-linked or marked as estimates | Choose the next opportunity |
+| Review | The report has sources, caveats, owner and decision date | Preview, then confirm any write |
+
+If a gate fails, ask for the smallest missing input and stop there. Do not invent a metric, treat correlation as causality, or write a report before preview and confirmation.
+
+The actual analysis tools are registered by the DeepSeek Harness/Cordis host. A Codex plugin installation may load the `growth-operator` guidance without exposing the Cordis tools themselves; verify that `growth_onboarding` appears in the host's callable tool list before treating the installation as operational.
+
 Tool results use a stable envelope with `ok`, `data`, `warnings`, `assumptions`, `lineage` and `nextActions`. Read `warnings` and `lineage` before using a number in a decision.
+
+### External acquisition planning and submission SOP
+
+For product directories or discovery channels, invoke the optional planning skill with a clear business outcome:
+
+```text
+Use $growth-acquisition-execution to find relevant product-directory channels for our target market.
+Start with the local candidate resource, define the live recheck and terms checklist, run the quality gate,
+prepare no more than 10 pilot site handoffs, and do not browse or submit anything.
+Record the evidence fields and explain how future referral visits and activation would connect back to the growth review.
+```
+
+The skill distinguishes quality-pilot planning from pre-approved batch planning. It does not perform live external actions, bypass CAPTCHA or verification, invent product facts, or treat submission count as growth impact.
+
+### AI search discoverability planning
+
+For AI search, product discovery or LLM-readiness questions, use the optional planning skill:
+
+```text
+Use $growth-ai-discoverability to assess whether our product is ready for AI search and product discovery.
+First classify the business model and outcome, then build a readiness matrix for crawlability,
+machine-readable facts, content trust and commerce-feed applicability. Output gaps, owners,
+acceptance criteria and validation metrics only; do not scan or modify the website.
+```
+
+It separates general search fundamentals from platform-specific advice, marks unknowns as `needs-external-validation`, and does not promise ranking, indexing, citations or conversion.
 
 ### Input conventions
 
@@ -196,7 +244,7 @@ Writes stay inside `defaultRoot` and use a version guard to avoid overwriting co
 | NRR or MRR growth is partial | Beginning MRR or movement amounts are missing | `Tell me which periods and movement rows prevent a complete MRR bridge.` |
 | Write was rejected | The target is outside the root, not Markdown, or changed since preview | `Preview the report again and show the safe path under my growth root.` |
 
-If the installed plugin does not expose `growth_review`, start a new Harness/Codex thread after reinstalling the plugin so the new tool manifest is loaded.
+If `growth_onboarding` or `growth_review` is absent from the callable tool list, do not infer that the skill text means the tool is available. Reinstall the plugin and start a fresh DeepSeek Harness/Cordis session; in Codex, an MCP bridge is required for a Cordis bundle to expose tools.
 
 ## Defaults
 

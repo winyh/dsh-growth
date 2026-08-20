@@ -45,7 +45,12 @@ source: events.csv`)
     expect(result.dimensions.find((item) => item.id === 'jtbd')?.status).toBe('ready')
     expect(result.dimensions.find((item) => item.id === 'data')?.status).toBe('partial')
     expect(result.methods.find((item) => item.id === 'growth-loops')?.projectStatus).toBe('ready')
+    expect(result.methods.find((item) => item.id === 'external-acquisition')?.pluginCapability).toBe('documentation')
+    expect(result.methods.find((item) => item.id === 'ai-discoverability')?.pluginCapability).toBe('documentation')
     expect(result.methods.find((item) => item.id === 'causal-inference')?.projectStatus).toBe('not-applicable')
+    expect(result.sop.steps).toHaveLength(6)
+    expect(result.sop.currentStep).toBe('measurement')
+    expect(result.sop.steps.find((item) => item.id === 'experiment')?.tool).toBe('growth_experiment')
     expect(result.topActions.length).toBeLessThanOrEqual(2)
     expect(result).not.toHaveProperty('rows')
   })
@@ -58,5 +63,30 @@ source: events.csv`)
     expect(result.topActions.length).toBe(2)
     expect(result.warnings.some((warning) => warning.includes('No growth Markdown note'))).toBe(true)
     expect(result.questions.length).toBeGreaterThan(0)
+    expect(result.sop.currentStep).toBe('context')
+    expect(result.sop.steps.find((item) => item.id === 'context')?.status).toBe('missing')
+  })
+
+  it('detects AI search discoverability as a documentation method', () => {
+    const note = parseNote('ai-readiness.md', `# AI search readiness
+
+AI Search / Discoverability Readiness: assess crawlability, structured data and content trust for our SaaS product.
+
+type: growth-project
+status: active
+updated: 2026-08-20
+owner: growth
+target: acquisition`)
+    const audit = auditGrowthNote(note)
+    const result = buildGrowthOnboarding({
+      root: '.',
+      notes: [{ note, audit, missingMetadata: [] }],
+      profiles: [],
+      datasetWarnings: [],
+      scanErrors: [],
+    })
+
+    expect(result.methods.find((item) => item.id === 'ai-discoverability')?.projectStatus).toBe('ready')
+    expect(result.methods.find((item) => item.id === 'ai-discoverability')?.pluginCapability).toBe('documentation')
   })
 })

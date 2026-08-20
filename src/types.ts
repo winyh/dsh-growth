@@ -73,6 +73,22 @@ export interface OnboardingMethod {
   nextAction?: string
 }
 
+export interface GrowthSopStep {
+  id: 'context' | 'measurement' | 'diagnosis' | 'experiment' | 'priority' | 'review'
+  order: number
+  name: string
+  status: ReadinessStatus
+  purpose: string
+  gate: string
+  tool: string
+  prompt: string
+}
+
+export interface GrowthSop {
+  currentStep: GrowthSopStep['id']
+  steps: GrowthSopStep[]
+}
+
 export interface GrowthOnboardingResult {
   generatedAt: string
   root: string
@@ -87,6 +103,7 @@ export interface GrowthOnboardingResult {
   }
   dimensions: OnboardingDimension[]
   methods: OnboardingMethod[]
+  sop: GrowthSop
   topActions: string[]
   questions: string[]
   warnings: string[]

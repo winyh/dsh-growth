@@ -18,6 +18,7 @@
 ```
 
 `growth_onboarding` 先检查准备度和方法覆盖；只有在目标、证据和数据基础满足后，才进入下面的增长闭环。
+它同时返回当前 SOP 关卡和每一关的通过条件；先完成 `sop.currentStep`，再进入下一步，不要求一次性补齐所有方法。
 
 ## JTBD
 
@@ -44,6 +45,22 @@ North Star Metric 应同时满足：代表用户得到的价值、团队能够�
 ## Growth Loops
 
 漏斗描述用户前进路径，增长循环解释结果如何反过来产生新的获客或收入。常见循环包括内容循环、邀请循环、销售循环、产品使用循环和付费再投资循环。循环必须写出输入、动作、输出、回流点和限制条件。
+
+## External Acquisition / Directory Submission
+
+外部目录、产品导航和发现渠道属于 Acquisition / Referral 方案与资源，不是“外链数量”指标。方案设计前要明确目标是产品发现、推荐访问、注册、激活还是收入，并记录候选来源、当前入口、受众相关性、条款、授权要求、建议状态和证据字段。插件只负责筛选、规划、SOP 和复盘，不执行外部网站操作。
+
+默认使用质量优先的 V2 试点方案：每批不超过 10 个站点，先完成质量门，再形成逐站授权清单和人工交接步骤。只有已筛选、已授权的 URL 列表才适合规划 V1 Batch 的规范化、去重、分片和断点恢复。验证码、邮箱验证、2FA、付费、互链、DNS / HTML 修改等需要后续操作者通过原生流程或单独授权完成，插件不得绕过，也不会代为执行。
+
+方案结果首先使用 `planned`、`ready for approval` 和 `not attempted`。如果用户之后提供外部执行证据，再区分 `submitted`、`awaiting approval`、`awaiting email verification`、`published`、`submission outcome unknown`、`submission failed`、`ineligible` 和 `unavailable`。`submission outcome unknown` 在核验账号后台、邮箱和公开页面前禁止重试。只有经过公开页面或可靠回执验证，并且有推荐访问、激活或收入数据回流时，才把它作为增长效果证据。
+
+## AI Search / Discoverability Readiness
+
+AI 搜索可发现性准备度用于判断用户能否理解和发现产品、服务或内容，不是 GEO-PRO 执行能力，也不是排名保证。先按电商、SaaS / B2B、内容或本地服务判断适用性，再审计可抓取与可索引、机器可理解事实、内容可信度和电商 Feed 四层。
+
+默认输出 `ready`、`partial`、`missing`、`not-applicable` 和 `needs-external-validation`，每项绑定证据、负责人、优先级、验收标准和验证方法。没有网站快照、Search Console、结构化数据测试、Feed 或工程资料时，只能输出待核验项，不能声称已经收录、被 AI 引用或带来增长。
+
+固定的 meta 字数、图片大小、允许某个 crawler 或“向 LLM 提交产品”不是通用成功条件。结构化数据、价格、库存、评价和产品事实必须与页面真实内容一致；最终仍以合格访问、注册、激活、购买和收入验证价值。
 
 ## Cohort / Retention
 
