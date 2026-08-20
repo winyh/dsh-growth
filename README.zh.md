@@ -1,8 +1,49 @@
 # 增长获客
 
-[English](README.md) · 中文
+中文 | [English](./README.md)
 
 `dsh-growth` 是一个本地优先的 DeepSeek Harness 插件，用于把 Markdown、CSV 和 JSONL 中的增长资料与业务数据，转化为可解释的增长诊断、落地方案和执行 SOP。
+
+## 插件定位：营销阶段的增长经营与测量层
+
+`dsh-growth` 负责营销阶段的获客、激活、留存和增长实验，同时把产品行为、营销效果和变现结果放进同一套测量框架。`dsh-business` 提供商业目标与经济边界，`dsh-sales` 提供成交与管道证据。
+
+## 定位架构：商业策略层 + 四段主链路
+
+```mermaid
+flowchart TB
+    S["dsh-business<br/>商业策略层<br/>价值 · 模式 · 定价 · 利润"]
+
+    subgraph MAIN["四段主链路"]
+        direction LR
+        A["1. 需求<br/>dsh-idea"] --> B["2. 产品<br/>dsh-product"]
+        B --> C["3. 营销<br/>dsh-geo + dsh-growth"]
+        C --> D["4. 变现执行<br/>dsh-sales"]
+    end
+
+    S -. "定义商业方向与边界" .-> A
+    D --> R["反馈<br/>成交 · 续费 · 收入 · 成本"]
+    R -->|产品迭代| B
+    R -->|新需求 / 新机会| A
+
+    classDef strategy fill:#FFF4D6,stroke:#B7791F,color:#5C4500
+    classDef stage fill:#E8F1FF,stroke:#3366CC,color:#173A7A
+    classDef feedback fill:#E8F7EE,stroke:#2F855A,color:#1C4532
+    class S strategy
+    class A,B,C,D stage
+    class R feedback
+```
+
+## 插件导航
+
+| 插件 | 分工 | 直接跳转 |
+|---|---|---|
+| `dsh-idea` | 外部机会、需求信号、候选方案和最小验证 | [README](../dsh-idea/README.zh.md) |
+| `dsh-product` | 产品定义、POC/MVP、发布门槛和 PMF | [README](../dsh-product/README.zh.md) |
+| `dsh-business` | 横跨全链路的商业策略、价值、定价和盈利 | [README](../dsh-business/README.zh.md) |
+| `dsh-sales` | 变现执行：资格判断、商机推进、成交、扩单和续约 | [README](../dsh-sales/README.zh.md) |
+| `dsh-growth` | 获客、激活、留存、收入分析和增长实验 | [README](./README.zh.md) |
+| `dsh-geo` | SEO/GEO/AEO、内容生产和搜索/答案引擎可发现性 | [README](../dsh-geo/README.zh.md) |
 
 ## 用户与公司的痛点需求
 
@@ -49,7 +90,7 @@
 
 可选的 `growth-ai-discoverability` skill 提供“AI 搜索 / 可发现性准备度”方法，用于判断可抓取性、结构化事实、内容可信度和商品 Feed 检查项是否适用于当前业务。它只输出准备度矩阵和落地方案，不扫描或修改网站，也不依赖 GEO-PRO。
 
-可选的 `growth-strategy-planning` skill 统一路由 Value Proposition Canvas、Lean Canvas、Bullseye 渠道、Aha Moment、流失 / 召回、Opportunity Solution Tree、用户访谈、推荐循环、市场规模、定价研究、B2B 销售漏斗和 Growth Accounting 等经典方法，输出小而完整的证据驱动方案，不增加实时执行能力，也不替代确定性指标工具。
+可选的 `growth-strategy-planning` skill 统一路由 Value Proposition Canvas、Lean Canvas、Bullseye 渠道、Aha Moment、流失 / 召回、Opportunity Solution Tree、用户访谈、推荐循环、市场规模、定价研究、B2B 销售漏斗和 Growth Accounting 等经典方法，输出小而完整的证据驱动方案，不增加实时执行能力，也不替代确定性指标工具。已确认机会的销售沟通、报价、谈判、成交和扩单推进交给 `dsh-sales`。
 
 ## 默认配置
 

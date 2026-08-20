@@ -1,10 +1,70 @@
 # Growth Acquisition for DeepSeek Harness
 
-[中文](README.zh.md) · English
+English | [中文](./README.zh.md)
 
 `dsh-growth` is a local-first DeepSeek Harness bundle for evidence-backed user growth and customer acquisition analysis, actionable plans and execution SOPs.
 
 It covers AARRR funnels, activation, retention cohorts, referral loops, MRR bridges, CAC/LTV/payback, HADI experiments, RICE prioritization and WBR/MBR reports for Markdown, CSV and JSONL data.
+
+## Plugin Positioning and Collaboration Navigation
+
+`dsh-growth` is the growth operating layer in the six-plugin system. It connects acquisition, activation, retention, revenue and experiment data to answer “what changed, why did it change and what should happen next?”
+
+- **Owns:** AARRR funnels, activation, retention cohorts, referrals, MRR, CAC/LTV/Payback, growth diagnosis, HADI experiments, prioritization and WBR/MBR/QBR.
+- **Inputs:** Product/PMF event definitions from [dsh-product](../dsh-product/README.md), pricing and margin rules from [dsh-business](../dsh-business/README.md), sales pipeline data from [dsh-sales](../dsh-sales/README.md), and content/search acquisition signals from [dsh-geo](../dsh-geo/README.md).
+- **Outputs:** Traceable metric diagnoses, funnel/retention/revenue analyses, experiment cards, operating reviews and next actions for product, commercial strategy, sales and opportunity discovery.
+- **Does not own:** Product definition, commercial pricing, sales follow-up or website engineering. It analyzes and plans growth; it does not treat unvalidated metrics as conclusions.
+
+## Positioning Architecture: Commercial Strategy Layer + Four-Stage Core Flow
+
+The six plugins work together to turn a real demand signal into a deliverable product, reach target customers through marketing, and use monetization results to drive product iteration or discover new opportunities.
+
+```mermaid
+flowchart TB
+    S["dsh-business<br/>Commercial strategy layer<br/>Value · model · pricing · profit"]
+
+    subgraph MAIN["Four-stage core flow"]
+        direction LR
+        A["1. Demand<br/>dsh-idea"] --> B["2. Product<br/>dsh-product"]
+        B --> C["3. Marketing<br/>dsh-geo + dsh-growth"]
+        C --> D["4. Monetization execution<br/>dsh-sales"]
+    end
+
+    S -. "Sets commercial direction and guardrails" .-> A
+    D --> R["Feedback<br/>Deals · renewals · revenue · cost"]
+    R -->|Product iteration| B
+    R -->|New demand / opportunities| A
+
+    classDef strategy fill:#FFF4D6,stroke:#B7791F,color:#5C4500
+    classDef stage fill:#E8F1FF,stroke:#3366CC,color:#173A7A
+    classDef feedback fill:#E8F7EE,stroke:#2F855A,color:#1C4532
+    class S strategy
+    class A,B,C,D stage
+    class R feedback
+```
+
+This plugin covers growth measurement and experimentation in the marketing stage: it puts the discoverability from [dsh-geo](../dsh-geo/README.md), product behavior and closes from [dsh-sales](../dsh-sales/README.md) into one measurement and experimentation framework. [dsh-business](../dsh-business/README.md) provides commercial goals and economic boundaries; when monetization results signal a problem, the evidence feeds [dsh-product](../dsh-product/README.md) for product iteration or [dsh-idea](../dsh-idea/README.md) for new opportunity discovery.
+
+## Plugin Navigation
+
+| Plugin | Clear responsibility | Direct link |
+| --- | --- | --- |
+| dsh-idea | External opportunities, demand signals, candidate directions and smallest useful tests | [README](../dsh-idea/README.md) |
+| dsh-product | Product definition, POC/MVP, release gates and PMF | [README](../dsh-product/README.md) |
+| dsh-business | Cross-cutting commercial strategy, value, pricing and profitability | [README](../dsh-business/README.md) |
+| dsh-sales | Monetization execution: qualification, deal progression, closing, expansion and renewal | [README](../dsh-sales/README.md) |
+| dsh-growth | Acquisition, activation, retention, revenue analysis and growth experiments (this plugin) | [README](./README.md) |
+| dsh-geo | SEO/GEO/AEO, content production and search/answer-engine discoverability | [README](../dsh-geo/README.md) |
+
+## Recommended Handoffs
+
+| Output from this plugin | Hand off to | Handoff question |
+| --- | --- | --- |
+| Activation/retention/feature-use diagnoses and experiment results | [dsh-product](../dsh-product/README.md) | Which product behaviors or scope should change? |
+| CAC, LTV, MRR, Payback and channel contribution | [dsh-business](../dsh-business/README.md) | Do current prices, packages and channels support profitable growth? |
+| Source, sales conversion and pipeline efficiency | [dsh-sales](../dsh-sales/README.md) | Which sales stages or customer types deserve priority? |
+| Content traffic, queries, low CTR and discoverability opportunities | [dsh-geo](../dsh-geo/README.md) | Which pages and content experiments can improve high-intent acquisition? |
+| Repeated new problems, user segments and contexts | [dsh-idea](../dsh-idea/README.md) | Has a new opportunity or demand hypothesis emerged? |
 
 ## User and company pain points
 
