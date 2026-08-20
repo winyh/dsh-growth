@@ -2,6 +2,8 @@
 
 English | [中文](./README.zh.md)
 
+`dsh-growth` 是一个本地优先的 DeepSeek Harness 插件，用于把 Markdown、CSV 和 JSONL 中的增长资料与业务数据，转化为可解释的增长诊断、落地方案和执行 SOP。
+
 `dsh-growth` is a local-first DeepSeek Harness bundle for evidence-backed user growth and customer acquisition analysis, actionable plans and execution SOPs.
 
 It covers AARRR funnels, activation, retention cohorts, referral loops, MRR bridges, CAC/LTV/payback, HADI experiments, RICE prioritization and WBR/MBR reports for Markdown, CSV and JSONL data.
