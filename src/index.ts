@@ -11,7 +11,7 @@ export const inject = ['tools', 'fs']
 export type Config = GrowthConfig
 
 export const Config: Schema<GrowthConfig> = Schema.object({
-  defaultRoot: Schema.string().default('D:\\ObsidianData'),
+  defaultRoot: Schema.string().default('.'),
   reportDir: Schema.string().default('.dsh-growth/reports'),
   maxFiles: Schema.number().default(500),
   maxRows: Schema.number().default(100_000),

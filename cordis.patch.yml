@@ -2,7 +2,7 @@
     - id: dsh-growth
       name: dsh-growth
       config:
-        defaultRoot: "D:\\ObsidianData"
+        defaultRoot: "."
         reportDir: ".dsh-growth/reports"
         maxFiles: 500
         maxRows: 100000
