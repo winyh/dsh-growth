@@ -41,9 +41,10 @@ Useful first requests include:
 5. Separate evidence, correlation and hypotheses.
 6. Turn the next action into a HADI experiment with a guardrail metric.
 7. Use RICE or ICE only after the opportunity has a metric and evidence link.
-8. If the next action is site discoverability or AI search readiness, use `growth-ai-discoverability` to qualify applicable checks and prepare a readiness plan; it does not perform live website actions.
-9. If the next action is an external acquisition or directory listing, use `growth-acquisition-execution` to qualify resources and prepare a submission SOP; it does not perform live external actions.
-10. Generate a WBR/MBR report and preview any file write before applying it.
+8. If the next action needs a classic growth framework, use `growth-strategy-planning` to choose the smallest method and produce a plan; it does not perform live external actions.
+9. If the next action is site discoverability or AI search readiness, use `growth-ai-discoverability` to qualify applicable checks and prepare a readiness plan; it does not perform live website actions.
+10. If the next action is an external acquisition or directory listing, use `growth-acquisition-execution` to qualify resources and prepare a submission SOP; it does not perform live external actions.
+11. Generate a WBR/MBR report and preview any file write before applying it.
 
 ## SOP gates
 
@@ -75,6 +76,7 @@ Use the smallest workflow that answers the user's question:
 | “Is growth economically healthy?” | `growth_economics` |
 | “Why did this metric change?” | `growth_diagnose` |
 | “What should we test?” | `growth_experiment` then `growth_prioritize` |
+| “Which classic growth method should we use?” | `growth-strategy-planning` |
 | “Is our site ready for AI search or product discovery?” | `growth-ai-discoverability` |
 | “Which external channels should we qualify, and how should we submit?” | `growth-acquisition-execution` |
 | “Prepare the operating review” | `growth_report`, then `growth_apply` only after confirmation |

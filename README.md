@@ -54,6 +54,8 @@ The optional `growth-acquisition-execution` skill adds external channel resource
 
 The optional `growth-ai-discoverability` skill adds an AI Search / Discoverability Readiness method for deciding which crawlability, structured-data, content-trust and commerce-feed checks apply to a business. It produces a readiness matrix and implementation plan; it does not scan or modify websites and does not depend on GEO-PRO.
 
+The optional `growth-strategy-planning` skill routes classic growth methods such as Value Proposition Canvas, Lean Canvas, Bullseye channels, Activation Events, Churn/Win-back, Opportunity Solution Trees, user interviews, referral loops, market sizing, pricing research, B2B revenue funnels and Growth Accounting into small, evidence-backed planning artifacts. It does not add live execution or replace the deterministic metric tools.
+
 ## Quick start
 
 ### Zero-threshold path
@@ -179,6 +181,19 @@ acceptance criteria and validation metrics only; do not scan or modify the websi
 ```
 
 It separates general search fundamentals from platform-specific advice, marks unknowns as `needs-external-validation`, and does not promise ranking, indexing, citations or conversion.
+
+### Classic growth method planning
+
+When the question is about choosing a framework or turning a vague growth problem into a plan, use the optional planning skill:
+
+```text
+Use $growth-strategy-planning for our current growth problem.
+Choose the smallest useful classic method, separate observed evidence from assumptions,
+produce the planning artifact, connect it to one primary metric and guardrails,
+and turn the riskiest assumption into a HADI experiment. Do not invent missing inputs.
+```
+
+It routes the request instead of stacking frameworks: Value Proposition / Lean Canvas for context, Bullseye for channels, Aha Moment for activation, Churn/Win-back for retention, Opportunity Solution Tree for diagnosis-to-solution, and pricing/B2B/Growth Accounting methods only when the business model requires them.
 
 ### Input conventions
 

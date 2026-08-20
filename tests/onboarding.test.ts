@@ -22,6 +22,7 @@ AARRR: Acquisition, Activation, Retention, Referral, Revenue.
 Hypothesis: If onboarding is shorter, activation will increase.
 HADI experiment with primary metric, guardrail metric, owner and success criteria.
 Growth Loop and RICE are recorded.
+Value Proposition Canvas, Lean Canvas, Aha Moment, Bullseye Framework and Opportunity Solution Tree are recorded.
 
 type: growth-project
 status: active
@@ -47,6 +48,9 @@ source: events.csv`)
     expect(result.methods.find((item) => item.id === 'growth-loops')?.projectStatus).toBe('ready')
     expect(result.methods.find((item) => item.id === 'external-acquisition')?.pluginCapability).toBe('documentation')
     expect(result.methods.find((item) => item.id === 'ai-discoverability')?.pluginCapability).toBe('documentation')
+    expect(result.methods.find((item) => item.id === 'value-proposition-canvas')?.projectStatus).toBe('ready')
+    expect(result.methods.find((item) => item.id === 'activation-event')?.projectStatus).toBe('ready')
+    expect(result.methods.find((item) => item.id === 'opportunity-solution-tree')?.projectStatus).toBe('ready')
     expect(result.methods.find((item) => item.id === 'causal-inference')?.projectStatus).toBe('not-applicable')
     expect(result.sop.steps).toHaveLength(6)
     expect(result.sop.currentStep).toBe('measurement')

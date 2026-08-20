@@ -49,6 +49,8 @@
 
 可选的 `growth-ai-discoverability` skill 提供“AI 搜索 / 可发现性准备度”方法，用于判断可抓取性、结构化事实、内容可信度和商品 Feed 检查项是否适用于当前业务。它只输出准备度矩阵和落地方案，不扫描或修改网站，也不依赖 GEO-PRO。
 
+可选的 `growth-strategy-planning` skill 统一路由 Value Proposition Canvas、Lean Canvas、Bullseye 渠道、Aha Moment、流失 / 召回、Opportunity Solution Tree、用户访谈、推荐循环、市场规模、定价研究、B2B 销售漏斗和 Growth Accounting 等经典方法，输出小而完整的证据驱动方案，不增加实时执行能力，也不替代确定性指标工具。
+
 ## 默认配置
 
 将插件安装到 DeepSeek Harness profile：
@@ -190,6 +192,18 @@ defaultTimezone: Asia/Shanghai
 ```
 
 它会区分通用搜索基础和平台专属建议；没有站点或工程证据时标记为 `needs-external-validation`，不会承诺排名、收录、AI 引用或转化。
+
+### 经典增长方法方案
+
+如果不知道当前问题应该使用哪套经典方法，可以这样开始：
+
+```text
+使用 $growth-strategy-planning 处理我们当前的增长问题。
+选择最小而有用的经典方法，区分已观察证据和假设，输出方案材料，
+绑定一个主指标和护栏指标，并把最高风险假设转成 HADI 实验；不要编造缺失输入。
+```
+
+它会按问题路由方法：价值主张 / Lean Canvas 用于上下文，Bullseye 用于渠道，Aha Moment 用于激活，流失 / 召回用于留存，Opportunity Solution Tree 用于从诊断到方案；定价、B2B 和 Growth Accounting 只在业务模型需要时使用。
 
 ### 如何阅读结果
 
