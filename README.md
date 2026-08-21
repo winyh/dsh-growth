@@ -8,6 +8,12 @@ English | [中文](./README.zh.md)
 
 Public six-plugin collaboration contract: [SUITE.md](https://github.com/winyh/dsh-business/blob/main/SUITE.md).
 
+## 协作可靠与归因边界
+
+`growth_artifact_review` 校验增长工件的 ID、内容指纹和有效期；`growth_attribution_review` 将 GEO/内容测量计划与实际指标匹配，只对具备 baseline 的观测进行比较，不自动宣称因果。
+
+`growth_artifact_review` validates growth artifacts, fingerprints and freshness; `growth_attribution_review` matches content measurement plans to observed metrics and compares only baseline-backed observations without claiming causality.
+
 It covers AARRR funnels, activation, retention cohorts, referral loops, MRR bridges, CAC/LTV/payback, HADI experiments, RICE prioritization and WBR/MBR reports for Markdown, CSV and JSONL data.
 
 ## Plugin Positioning and Collaboration Navigation

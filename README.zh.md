@@ -6,6 +6,8 @@
 
 六插件公开协作契约：[SUITE.md](https://github.com/winyh/dsh-business/blob/main/SUITE.md)。
 
+`growth_artifact_review` 校验增长工件；`growth_attribution_review` 只比较具备 baseline 的观测，不自动宣称因果。
+
 ## 插件定位：营销阶段的增长经营与测量层
 
 `dsh-growth` 负责营销阶段的获客、激活、留存和增长实验，同时把产品行为、营销效果和变现结果放进同一套测量框架。`dsh-business` 提供商业目标与经济边界，`dsh-sales` 提供成交与管道证据。

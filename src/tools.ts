@@ -18,6 +18,7 @@ import { buildGrowthOnboarding, collectOnboardingNotes, collectOnboardingProfile
 import { buildMetricContractReview, consumeGrowthHandoff } from './contracts.js'
 import type { GrowthDataServiceApi } from './service.js'
 import { readNote, scanGrowthVault } from './vault.js'
+import { appendArtifactAudit, attachArtifactMetadata, contentHash, reviewArtifact } from './artifacts.js'
 import type { ResultLineage } from './output.js'
 import type { CohortAnalysis, DatasetProfile, EconomicsAnalysis, FileSystemLike, FunnelAnalysis, GrowthAuditResult, GrowthConfig, GrowthReviewResult, PriorityItem, PriorityMethod, ReportType, Row } from './types.js'
 
@@ -29,7 +30,7 @@ function wrapResult(value: unknown, options: { lineage?: ResultLineage[]; assump
   const warnings = typeof value === 'object' && value !== null && 'warnings' in value && Array.isArray(value.warnings)
     ? value.warnings.filter((warning): warning is string => typeof warning === 'string')
     : []
-  return resultEnvelope({ data: value as JsonValue, warnings, assumptions: options.assumptions, lineage: options.lineage, nextActions: options.nextActions })
+  return resultEnvelope({ data: attachArtifactMetadata(value, { staleAfterDays: 30 }) as JsonValue, warnings, assumptions: options.assumptions, lineage: options.lineage, nextActions: options.nextActions })
 }
 
 function fsFrom(ctx: Context): FileSystemLike {
@@ -761,6 +762,53 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
   }))
 
   ctx.tools.register(defineTool({
+    name: 'growth_attribution_review',
+    description: 'Match GEO/content measurement plans to observed growth metrics. It reports measured, partial or unmeasured links and explicitly avoids causal claims.',
+    parameters: {
+      measurementJson: { type: 'string', required: true, description: 'One measurement plan, an array, or a result envelope containing measurement plans.' },
+      metricsJson: { type: 'string', required: true, description: 'JSON array of {contentId, channel, metric, value, baseline?, window, source?} observations.' },
+    },
+    output: growthOutput(config.maxResultChars),
+    async execute(args) {
+      const unwrap = (value: unknown): unknown => typeof value === 'object' && value !== null && 'data' in value ? (value as { data: unknown }).data : value
+      let measurementValue: unknown
+      let metricsValue: unknown
+      try { measurementValue = unwrap(JSON.parse(args.measurementJson) as unknown); metricsValue = JSON.parse(args.metricsJson) as unknown } catch (error) { throw new Error(`measurementJson and metricsJson must be valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
+      const plans = Array.isArray(measurementValue) ? measurementValue : [measurementValue]
+      if (!Array.isArray(metricsValue)) throw new Error('metricsJson must be a JSON array.')
+      const observations = metricsValue.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item))
+      const results = plans.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item)).map((plan) => {
+        const contentId = String(plan.contentId ?? '').trim()
+        const channel = String(plan.channel ?? '').trim()
+        const targetMetric = String(plan.targetMetric ?? '').trim()
+        const matched = observations.filter((row) => String(row.contentId ?? '').trim() === contentId && (!channel || String(row.channel ?? '').trim() === channel) && (!targetMetric || String(row.metric ?? '').trim() === targetMetric))
+        const comparable = matched.filter((row) => typeof row.value === 'number' && typeof row.baseline === 'number')
+        return { contentId, channel, targetMetric, status: matched.length === 0 ? 'unmeasured' : comparable.length === matched.length ? 'measured' : 'partial', observations: matched.length, comparableObservations: comparable.length, deltas: comparable.map((row) => ({ window: row.window, delta: Number(row.value) - Number(row.baseline), source: row.source })) }
+      })
+      const warnings = results.some((item) => item.status === 'unmeasured') ? ['部分内容没有匹配到增长观测，不能判断效果。'] : results.some((item) => item.status === 'partial') ? ['部分观测缺少 baseline，不能进行可靠比较。'] : ['结果只表示指标关联，不证明内容导致增长；需要实验或对照组才能建立因果。']
+      const nextActions = results.some((item) => item.status !== 'measured') ? ['补齐 contentId、channel、targetMetric、value、baseline 和 window 后重新复盘。'] : ['将 measured 结果纳入增长复盘，并继续检查留存、收入和样本量。']
+      return wrapResult({ artifactType: 'growth-attribution-review', generatedAt: new Date().toISOString(), causality: 'not-established', results, warnings, nextActions }, { nextActions })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'growth_artifact_review',
+    description: 'Validate a growth artifact before using it as a decision input. Checks schema, stable ID and evidence freshness without changing files.',
+    parameters: {
+      artifactJson: { type: 'string', required: true, description: 'JSON returned by a plugin tool.' },
+      expectedType: { type: 'string', description: 'Optional expected artifactType.' },
+    },
+    output: growthOutput(config.maxResultChars),
+    async execute(args) {
+      let value: unknown
+      try { value = JSON.parse(args.artifactJson) as unknown } catch (error) { throw new Error(`artifactJson must be valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
+      const data = typeof value === 'object' && value !== null && 'data' in value ? (value as { data: unknown }).data : value
+      const review = reviewArtifact(data, args.expectedType?.trim() || undefined)
+      return wrapResult({ artifactType: 'growth-artifact-review', generatedAt: new Date().toISOString(), ...review }, { nextActions: review.nextActions })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
     name: 'growth_report',
     description: 'Generate a WBR, MBR, QBR or experiment-review Markdown report from explicit metrics, findings, experiments and actions.',
     parameters: {
@@ -822,7 +870,9 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
       }
       await fs.writeText(target, args.content, { kind: 'replaceIfVersion', version: info.version }, exec.signal)
       ctx.emit('growth/report-applied', { path: args.path })
-      return wrapResult({ status: 'applied', path: args.path, changed: args.content !== current, applied: true, guarded: true }, { lineage: [{ source: args.path }] })
+      let audit: unknown
+      try { audit = await appendArtifactAudit(fs, config.defaultRoot, { action: 'apply', path: args.path, beforeHash: contentHash(current), afterHash: contentHash(args.content), approved: true }, exec.signal) } catch (error) { audit = { status: 'audit-failed', warning: error instanceof Error ? error.message : String(error) } }
+      return wrapResult({ status: 'applied', path: args.path, changed: args.content !== current, applied: true, guarded: true, audit }, { lineage: [{ source: args.path }] })
     },
   }))
 
