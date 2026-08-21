@@ -13,6 +13,7 @@
   },
   "files": [
     "lib",
+    ".codex-plugin",
     "cordis.patch.yml",
     "README.md",
     "README.zh.md",
@@ -21,7 +22,12 @@
     "PLAN.md",
     "assets",
     "references",
-    "skills"
+    "skills/growth-acquisition-execution/SKILL.md",
+    "skills/growth-acquisition-execution/scripts/audit_submission_record.py",
+    "skills/growth-acquisition-execution/tests/test_audit_submission_record.py",
+    "skills/growth-ai-discoverability/SKILL.md",
+    "skills/growth-operator/SKILL.md",
+    "skills/growth-strategy-planning/SKILL.md"
   ],
   "scripts": {
     "build": "tsdown",
