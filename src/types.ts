@@ -242,6 +242,28 @@ export interface GrowthReviewResult {
   warnings: string[]
 }
 
+export interface GrowthHandoffContext {
+  artifactType: 'growth-handoff-consumption'
+  schemaVersion: '1.0'
+  productName: string
+  primaryMetric: string
+  guardrails: string[]
+  evidence: string[]
+  openQuestions: string[]
+  status: 'ready' | 'partial' | 'blocked'
+  warnings: string[]
+  nextActions: string[]
+}
+
+export interface GrowthMetricContractReview {
+  artifactType: 'growth-metric-contract'
+  schemaVersion: '1.0'
+  generatedAt: string
+  metrics: Array<{ name: string; event: string; window: string; timezone: string; currency?: string; status: 'ready' | 'partial' }>
+  warnings: string[]
+  nextActions: string[]
+}
+
 export interface FunnelStageResult {
   name: string
   event: string

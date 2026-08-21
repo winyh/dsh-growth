@@ -7,6 +7,7 @@ export interface ResultLineage {
 }
 
 export interface ResultEnvelope<T extends JsonValue = JsonValue> {
+  schemaVersion: '1.0'
   ok: boolean
   data: T
   warnings: string[]
@@ -19,6 +20,7 @@ export const resultSchema = {
   type: 'object' as const,
   additionalProperties: false as const,
   properties: {
+    schemaVersion: { type: 'string' as const },
     ok: { type: 'boolean' as const },
     data: { type: 'json' as const },
     warnings: { type: 'array' as const, items: { type: 'string' as const } },
@@ -42,6 +44,7 @@ export function resultEnvelope<T extends JsonValue>(options: {
   nextActions?: string[]
 }): ResultEnvelope<T> {
   return {
+    schemaVersion: '1.0',
     ok: true,
     data: options.data,
     warnings: [...(options.warnings ?? [])],

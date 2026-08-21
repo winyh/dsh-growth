@@ -4,6 +4,8 @@
 
 `dsh-growth` 是一个本地优先的 DeepSeek Harness 插件，用于把 Markdown、CSV 和 JSONL 中的增长资料与业务数据，转化为可解释的增长诊断、落地方案和执行 SOP。
 
+六插件公开协作契约：[SUITE.md](https://github.com/winyh/dsh-business/blob/main/SUITE.md)。
+
 ## 插件定位：营销阶段的增长经营与测量层
 
 `dsh-growth` 负责营销阶段的获客、激活、留存和增长实验，同时把产品行为、营销效果和变现结果放进同一套测量框架。`dsh-business` 提供商业目标与经济边界，`dsh-sales` 提供成交与管道证据。

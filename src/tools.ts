@@ -15,6 +15,7 @@ import { resultEnvelope, renderResult, resultSchema } from './output.js'
 import { buildReview, inferStages, selectReviewSources } from './review.js'
 import { doctorRoot, profileDataset } from './quality.js'
 import { buildGrowthOnboarding, collectOnboardingNotes, collectOnboardingProfiles } from './onboarding.js'
+import { buildMetricContractReview, consumeGrowthHandoff } from './contracts.js'
 import type { GrowthDataServiceApi } from './service.js'
 import { readNote, scanGrowthVault } from './vault.js'
 import type { ResultLineage } from './output.js'
@@ -238,6 +239,40 @@ async function discoverReviewDatasets(
 export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
   const fs = fsFrom(ctx)
   const growthData = growthDataFrom(ctx)
+
+  ctx.tools.register(defineTool({
+    name: 'growth_handoff_consume',
+    description: 'Consume and validate a dsh-product growth-handoff before measurement work. It requires product outcome evidence, a primary metric, guardrails and open questions to remain visible.',
+    parameters: {
+      handoffJson: { type: 'string', required: true, description: 'JSON returned by product_growth_handoff, including its result envelope or data object.' },
+    },
+    output: growthOutput(config.maxResultChars),
+    async execute(args) {
+      let parsed: unknown
+      try { parsed = JSON.parse(args.handoffJson) as unknown } catch (error) { throw new Error(`handoffJson must be valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
+      const data = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) && 'data' in parsed ? (parsed as { data: unknown }).data : parsed
+      if (typeof data !== 'object' || data === null || Array.isArray(data)) throw new Error('handoffJson must contain an object.')
+      const result = consumeGrowthHandoff(data as Record<string, unknown>)
+      return wrapResult(result, { nextActions: result.nextActions })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'growth_metric_contract',
+    description: 'Validate a shared event/metric definition set with explicit event, observation window, timezone and optional currency. It does not calculate the metric.',
+    parameters: {
+      metricsJson: { type: 'string', required: true, description: 'JSON array of metric definitions.' },
+    },
+    output: growthOutput(config.maxResultChars),
+    async execute(args) {
+      let parsed: unknown
+      try { parsed = JSON.parse(args.metricsJson) as unknown } catch (error) { throw new Error(`metricsJson must be valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
+      const metrics = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) && 'data' in parsed ? (parsed as { data: unknown }).data : parsed
+      if (!Array.isArray(metrics)) throw new Error('metricsJson must contain an array.')
+      const result = buildMetricContractReview({ metrics, timezone: config.defaultTimezone, currency: config.defaultCurrency })
+      return wrapResult(result, { nextActions: result.nextActions })
+    },
+  }))
 
   ctx.tools.register(defineTool({
     name: 'growth_audit_note',
