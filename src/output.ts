@@ -1,4 +1,4 @@
-import type { JsonValue } from '@deepseek-ai/dsh-tools'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 
 export interface ResultLineage {
   source: string
@@ -46,10 +46,10 @@ export function resultEnvelope<T extends JsonValue>(options: {
   return {
     schemaVersion: '1.0',
     ok: true,
-    data: options.data,
+    data: JSON.parse(JSON.stringify(options.data)) as T,
     warnings: [...(options.warnings ?? [])],
     assumptions: [...(options.assumptions ?? [])],
-    lineage: [...(options.lineage ?? [])] as unknown as Array<Record<string, JsonValue>>,
+    lineage: JSON.parse(JSON.stringify(options.lineage ?? [])) as Array<Record<string, JsonValue>>,
     nextActions: [...(options.nextActions ?? [])],
   }
 }
