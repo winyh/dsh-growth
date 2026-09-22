@@ -1,5 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
+import { handoffParameters, receiveHandoff } from './handoff-receive.js'
+import { reviewGrowthAttribution } from './attribution.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-fs'
 import { auditGrowthNote } from './context.js'
@@ -254,6 +256,11 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
       try { parsed = JSON.parse(args.handoffJson) as unknown } catch (error) { throw new Error(`handoffJson must be valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
       const data = typeof parsed === 'object' && parsed !== null && !Array.isArray(parsed) && 'data' in parsed ? (parsed as { data: unknown }).data : parsed
       if (typeof data !== 'object' || data === null || Array.isArray(data)) throw new Error('handoffJson must contain an object.')
+      const integrity = reviewArtifact(data, 'growth-handoff')
+      if (integrity.status !== 'ready' || (typeof parsed === 'object' && parsed !== null && 'data' in parsed && (!('ok' in parsed) || parsed.ok !== true))) {
+        return wrapResult({ artifactType: 'growth-handoff-consumption', status: 'blocked', issues: integrity.issues,
+          warnings: integrity.warnings, nextActions: ['先重新生成有效来源，再调用 handoff_receive；不能跳过完整性与有效期检查。'] })
+      }
       const result = consumeGrowthHandoff(data as Record<string, unknown>)
       return wrapResult(result, { nextActions: result.nextActions })
     },
@@ -767,28 +774,24 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
     description: 'Match GEO/content measurement plans to observed growth metrics. It reports measured, partial or unmeasured links and explicitly avoids causal claims.',
     parameters: {
       measurementJson: { type: 'string', required: true, description: 'One measurement plan, an array, or a result envelope containing measurement plans.' },
-      metricsJson: { type: 'string', required: true, description: 'JSON array of {contentId, channel, metric, value, baseline?, window, source?} observations.' },
+      metricsJson: { type: 'string', required: true, description: 'JSON array of {contentId, channel, metric, value, baseline, unit, baselineWindow, window, source}. Use completed non-overlapping ISO date/date windows and deduplicated observations.' },
     },
     output: growthOutput(config.maxResultChars),
     async execute(args) {
-      const unwrap = (value: unknown): unknown => typeof value === 'object' && value !== null && 'data' in value ? (value as { data: unknown }).data : value
-      let measurementValue: unknown
-      let metricsValue: unknown
-      try { measurementValue = unwrap(JSON.parse(args.measurementJson) as unknown); metricsValue = JSON.parse(args.metricsJson) as unknown } catch (error) { throw new Error(`measurementJson and metricsJson must be valid JSON: ${error instanceof Error ? error.message : String(error)}`) }
-      const plans = Array.isArray(measurementValue) ? measurementValue : [measurementValue]
-      if (!Array.isArray(metricsValue)) throw new Error('metricsJson must be a JSON array.')
-      const observations = metricsValue.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item))
-      const results = plans.filter((item): item is Record<string, unknown> => typeof item === 'object' && item !== null && !Array.isArray(item)).map((plan) => {
-        const contentId = String(plan.contentId ?? '').trim()
-        const channel = String(plan.channel ?? '').trim()
-        const targetMetric = String(plan.targetMetric ?? '').trim()
-        const matched = observations.filter((row) => String(row.contentId ?? '').trim() === contentId && (!channel || String(row.channel ?? '').trim() === channel) && (!targetMetric || String(row.metric ?? '').trim() === targetMetric))
-        const comparable = matched.filter((row) => typeof row.value === 'number' && typeof row.baseline === 'number')
-        return { contentId, channel, targetMetric, status: matched.length === 0 ? 'unmeasured' : comparable.length === matched.length ? 'measured' : 'partial', observations: matched.length, comparableObservations: comparable.length, deltas: comparable.map((row) => ({ window: row.window, delta: Number(row.value) - Number(row.baseline), source: row.source })) }
-      })
-      const warnings = results.some((item) => item.status === 'unmeasured') ? ['部分内容没有匹配到增长观测，不能判断效果。'] : results.some((item) => item.status === 'partial') ? ['部分观测缺少 baseline，不能进行可靠比较。'] : ['结果只表示指标关联，不证明内容导致增长；需要实验或对照组才能建立因果。']
-      const nextActions = results.some((item) => item.status !== 'measured') ? ['补齐 contentId、channel、targetMetric、value、baseline 和 window 后重新复盘。'] : ['将 measured 结果纳入增长复盘，并继续检查留存、收入和样本量。']
-      return wrapResult({ artifactType: 'growth-attribution-review', generatedAt: new Date().toISOString(), causality: 'not-established', results, warnings, nextActions }, { nextActions })
+      const result = reviewGrowthAttribution(JSON.parse(args.measurementJson) as unknown, JSON.parse(args.metricsJson) as unknown)
+      return wrapResult(result, { nextActions: result.nextActions })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'growth_handoff_receive',
+    description: 'Receive a supported upstream artifact with integrity, routing and evidence checks. Produce an owned, dated receipt for one initiative; acceptance is not approval or task completion. Read-only.',
+    parameters: handoffParameters,
+    output: growthOutput(config.maxResultChars),
+    async execute(args, exec) {
+      exec.signal.throwIfAborted()
+      const receipt = receiveHandoff(JSON.parse(args.artifactJson) as unknown, args)
+      return wrapResult(receipt, { nextActions: receipt.nextActions })
     },
   }))
 

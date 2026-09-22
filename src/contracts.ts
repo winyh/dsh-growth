@@ -11,6 +11,9 @@ function list(value: unknown): string[] {
 export function consumeGrowthHandoff(input: Record<string, unknown>): GrowthHandoffContext {
   const warnings: string[] = []
   if (input.artifactType !== 'growth-handoff') warnings.push('artifactType 不是 growth-handoff。')
+  if (input.handoffFrom !== 'dsh-product' || input.handoffTo !== 'dsh-growth') warnings.push('来源/目标路由不正确。')
+  if (['blocked', 'stale', 'rejected'].includes(text(input.status))) warnings.push('上游状态阻塞。')
+  if (['partial', 'draft'].includes(text(input.status))) warnings.push('上游尚未完成验证。')
   const productName = text(input.productName)
   const primaryMetric = text(input.primaryMetric)
   const evidence = list(input.evidence)
@@ -18,8 +21,11 @@ export function consumeGrowthHandoff(input: Record<string, unknown>): GrowthHand
   const openQuestions = list(input.openQuestions)
   if (!productName) warnings.push('缺少 productName。')
   if (!primaryMetric) warnings.push('缺少 primaryMetric。')
+  if (!text(input.productOutcome)) warnings.push('缺少 productOutcome。')
+  if (!text(input.source)) warnings.push('缺少 source。')
+  if (guardrails.length === 0) warnings.push('缺少护栏指标。')
   if (evidence.length === 0) warnings.push('缺少产品结果证据。')
-  const status = warnings.some((item) => item.includes('artifactType')) ? 'blocked' : warnings.length > 0 ? 'partial' : 'ready'
+  const status = warnings.some((item) => item.includes('artifactType') || item.includes('路由') || item.includes('阻塞')) ? 'blocked' : warnings.length > 0 ? 'partial' : 'ready'
   return { artifactType: 'growth-handoff-consumption', schemaVersion: '1.0', productName, primaryMetric, guardrails, evidence, openQuestions, status, warnings, nextActions: status === 'ready' ? ['按 primaryMetric、guardrails、window 和数据源运行 growth_review。'] : ['补齐产品结果、主指标、护栏指标和来源后再启动增长复盘。'] }
 }
 
