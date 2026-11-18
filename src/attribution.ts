@@ -29,22 +29,27 @@ export function reviewGrowthAttribution(value: unknown, metrics: unknown) {
     if (!baseline || !validDate(plan.publishAt) || baseline[1] >= Date.parse(plan.publishAt)) issues.push('基线窗口无效或与发布期重叠。')
     const matches = metrics.map(asRecord).filter(row => row.contentId === plan.contentId && row.channel === plan.channel && row.metric === plan.targetMetric)
     const seen = new Set<string>()
-    const deltas: Array<{ window: string; delta: number; value: number; baseline: number; unit: string; source: string }> = []
+    const byWindow = new Map<string, { window: string; delta: number; value: number; baseline: number; unit: string; source: string }>()
     for (const row of matches) {
       const observation = window(row.window)
-      const key = String(row.window)
-      if (seen.has(key)) { issues.push('同一观察窗口存在重复或冲突记录，先去重或明确分群。'); continue }
-      seen.add(key)
       if (!observation || !validDate(plan.publishAt) || observation[0] < Date.parse(plan.publishAt) || observation[1] > Date.now()
         || !baseline || observation[0] <= baseline[1]) { issues.push('观察窗口无效、尚未结束或与基线/发布前时段重叠。'); continue }
+      const key = observation.join('/')
+      if (seen.has(key)) {
+        byWindow.delete(key)
+        issues.push('同一观察窗口存在重复或冲突记录，先去重或明确分群。')
+        continue
+      }
+      seen.add(key)
       if (typeof row.value !== 'number' || !Number.isFinite(row.value) || typeof row.baseline !== 'number' || !Number.isFinite(row.baseline)
         || !Number.isFinite(row.value - row.baseline)) { issues.push('value/baseline 必须是有限数字。'); continue }
       if (typeof row.source !== 'string' || !row.source.trim() || typeof row.unit !== 'string' || !row.unit.trim()
-        || row.baselineWindow !== plan.baselineWindow || (row.baselineUnit !== undefined && row.baselineUnit !== row.unit)) {
+        || window(row.baselineWindow)?.join('/') !== baseline.join('/') || (row.baselineUnit !== undefined && row.baselineUnit !== row.unit)) {
         issues.push('需要可追溯 source、统一 unit，以及与计划一致的 baselineWindow。'); continue
       }
-      deltas.push({ window: String(row.window), delta: row.value - row.baseline, value: row.value, baseline: row.baseline, unit: row.unit, source: row.source })
+      byWindow.set(key, { window: String(row.window), delta: row.value - row.baseline, value: row.value, baseline: row.baseline, unit: row.unit, source: row.source })
     }
+    const deltas = [...byWindow.values()]
     return {
       planArtifactId: String(plan.artifactId ?? ''), planContentHash: String(plan.contentHash ?? ''),
       contentId: String(plan.contentId ?? ''), channel: String(plan.channel ?? ''), targetMetric: String(plan.targetMetric ?? ''),

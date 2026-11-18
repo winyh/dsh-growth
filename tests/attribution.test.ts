@@ -14,6 +14,16 @@ it('preserves negative outcomes and binds observations to the exact plan', () =>
   expect(result.results[0]?.deltas[0]?.delta).toBe(-4)
   expect(result.causality).toBe('not-established')
 })
+it('excludes all conflicting copies of the same time range regardless of notation and order', () => {
+  const conflict = { ...row, value: 20, window: '2026-09-01T08:00:00+08:00/2026-09-21T23:59:59.999Z' }
+  const distinct = { ...row, window: '2026-09-22T00:00:00Z/2026-09-22T01:00:00Z' }
+  for (const rows of [[row, conflict, distinct], [conflict, distinct, row, conflict]]) {
+    const result = reviewGrowthAttribution(plan(), rows)
+    expect(result.status).toBe('partial')
+    expect(result.results[0]?.deltas.map(delta => delta.window)).toEqual([distinct.window])
+  }
+})
+
 it('does not count missing plans or observations as success', () => {
   expect(reviewGrowthAttribution([], []).status).toBe('partial')
   expect(reviewGrowthAttribution(plan(), []).results[0]?.status).toBe('unmeasured')
