@@ -56,6 +56,29 @@ try {
     assert.equal(result.value.ok, true)
     assert.ok(result.value.data, 'result must contain structured business output')
   }
+  const callExperiment = async (name, args) => {
+    const result = await tools.execute({ name, arguments: args, callId: name, signal: new AbortController().signal })
+    assert.equal(result.isError, false, JSON.stringify(result))
+    return result.value
+  }
+  const start = new Date(Date.now() + 86_400_000).toISOString()
+  const end = new Date(Date.now() + 2 * 86_400_000).toISOString()
+  const primary = { metric: 'activation', unit: 'pp', direction: 'at-least', threshold: 3 }
+  const guard = { metric: 'refund', unit: 'pp', direction: 'at-most', threshold: 0.5 }
+  const plan = await callExperiment('growth_experiment', { title: 'Test', problem: 'Low activation', hypothesis: 'Shorter signup helps',
+    stage: 'activation', targetMetric: 'activation', criteriaJson: JSON.stringify({ start, end, primary, guardrails: [guard] }) })
+  const planJson = JSON.stringify(plan)
+  assert.equal((await callExperiment('growth_experiment_assess', { planJson })).data.status, 'pending')
+  const { mock } = await import('node:test')
+  mock.timers.enable({ apis: ['Date'], now: Date.parse(end) })
+  try {
+    const rows = [ { metric: 'activation', unit: 'pp', control: 20, treatment: 24, controlN: 100, treatmentN: 100, source: 'events.csv' },
+      { metric: 'refund', unit: 'pp', control: 2, treatment: 3, controlN: 100, treatmentN: 100, source: 'refund.csv' } ]
+    const assessment = await callExperiment('growth_experiment_assess', { planJson,
+      observationsJson: JSON.stringify({ planHash: plan.data.contentHash, start, end, rows }) })
+    assert.equal(assessment.data.status, 'breached')
+    assert.deepEqual(assessment.data.metrics.map(row => row.status), ['met', 'breached'])
+  } finally { mock.timers.reset() }
   const invalid = await invoke({ root: 42 })
   const receipt = await tools.execute({
     callId: 'compat-receipt', name: prefix + 'handoff_receive',

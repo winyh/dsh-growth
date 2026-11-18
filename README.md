@@ -137,7 +137,8 @@ Growth work often breaks down in the gap between data, decisions and execution:
 | `growth_cohort_analyze` | Analyze retention cohorts and lifecycle states |
 | `growth_economics` | Calculate MRR bridge, CAC, LTV, NRR and payback |
 | `growth_diagnose` | Diagnose a growth change and rank evidence-backed hypotheses |
-| `growth_experiment` | Create a HADI experiment card and RICE/ICE score |
+| `growth_experiment` | Create a HADI experiment card and optionally preregister measurable criteria |
+| `growth_experiment_assess` | Assess the primary metric and each guardrail against the original thresholds |
 | `growth_prioritize` | Rank growth opportunities with RICE or ICE |
 | `growth_report` | Generate WBR, MBR, QBR or experiment-review Markdown |
 | `growth_apply` | Preview or guarded-write Markdown under the configured root |
@@ -147,6 +148,35 @@ The optional `growth-acquisition-execution` skill adds external channel resource
 The optional `growth-ai-discoverability` skill adds an AI Search / Discoverability Readiness method for deciding which crawlability, structured-data, content-trust and commerce-feed checks apply to a business. It produces a readiness matrix and implementation plan; it does not scan or modify websites and does not depend on GEO-PRO.
 
 The optional `growth-strategy-planning` skill routes classic growth methods such as Value Proposition Canvas, Lean Canvas, Bullseye channels, Activation Events, Churn/Win-back, Opportunity Solution Trees, user interviews, referral loops, market sizing, pricing research, B2B revenue funnels and Growth Accounting into small, evidence-backed planning artifacts. It does not add live execution or replace the deterministic metric tools.
+
+## Preregister and assess an experiment
+
+Before launch, call `growth_experiment` with the usual card fields, `targetMetric="activation"`, and the following JSON serialized as `criteriaJson`. Replace both dates with your future observation window. The window includes its start and excludes its end. The minimum applies to each group separately and defaults to one.
+
+```json
+{
+  "start": "2027-03-01T00:00:00Z",
+  "end": "2027-03-15T00:00:00Z",
+  "primary": {"metric":"activation","unit":"pp","direction":"at-least","threshold":3,"minPerGroup":100},
+  "guardrails": [{"metric":"refund","unit":"pp","direction":"at-most","threshold":0.5,"minPerGroup":100}]
+}
+```
+
+Save the complete returned JSON. At or after the end, pass it as `planJson` to `growth_experiment_assess`. Serialize the following as `observationsJson`, using the original plan's `data.contentHash`, matching dates, and actual sources. Each row summarizes the treatment and control groups over the entire window. For `pp`, enter percentages on the 0–100 scale.
+
+```json
+{
+  "planHash": "<contentHash>",
+  "start": "2027-03-01T00:00:00Z",
+  "end": "2027-03-15T00:00:00Z",
+  "rows": [
+    {"metric":"activation","unit":"pp","control":20,"treatment":24,"controlN":150,"treatmentN":151,"source":"activation.csv"},
+    {"metric":"refund","unit":"pp","control":2,"treatment":3,"controlN":150,"treatmentN":151,"source":"refund.csv"}
+  ]
+}
+```
+
+The example yields `met` for activation (+4 pp) and `breached` for refunds (+1 pp). Missing or duplicate evidence gives that metric `insufficient-data`. Before the end all metrics are `pending`. After the end, the overall status gives precedence to a breached guardrail, then a missed primary target, then insufficient evidence. These are descriptive threshold checks. A card created without criteria is a planning draft.
 
 ## Quick start
 

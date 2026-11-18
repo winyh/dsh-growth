@@ -202,6 +202,35 @@ defaultTimezone: Asia/Shanghai
 
 实际分析工具由 DeepSeek Harness / Cordis 宿主注册。Codex 插件可能只加载 `growth-operator` 使用说明，并不代表 Cordis 工具已经可调用；必须先确认宿主的可调用工具列表中出现 `growth_onboarding`，才能认为安装真正可用。
 
+## 实验开始前登记，到期后判定
+
+开始前调用 `growth_experiment`，填写常规实验卡字段，将 `targetMetric` 设为 `activation`，并把下面的 JSON 序列化为 `criteriaJson`。把示例日期换为实际的未来窗口，起点包含在内，终点不包含在内。每组最低样本数默认为 1，可以按实验设计提高。
+
+```json
+{
+  "start": "2027-03-01T00:00:00Z",
+  "end": "2027-03-15T00:00:00Z",
+  "primary": {"metric":"activation","unit":"pp","direction":"at-least","threshold":3,"minPerGroup":100},
+  "guardrails": [{"metric":"refund","unit":"pp","direction":"at-most","threshold":0.5,"minPerGroup":100}]
+}
+```
+
+保存工具返回的完整 JSON。到期后调用 `growth_experiment_assess`，将原结果作为 `planJson`，将下面的 JSON 序列化为 `observationsJson`。填入原计划的 `data.contentHash`、相同窗口和实际数据来源。每行填写覆盖整个窗口的实验组与对照组汇总值。单位为 `pp` 时，两组均填写 0–100 的百分数。
+
+```json
+{
+  "planHash": "<contentHash>",
+  "start": "2027-03-01T00:00:00Z",
+  "end": "2027-03-15T00:00:00Z",
+  "rows": [
+    {"metric":"activation","unit":"pp","control":20,"treatment":24,"controlN":150,"treatmentN":151,"source":"activation.csv"},
+    {"metric":"refund","unit":"pp","control":2,"treatment":3,"controlN":150,"treatmentN":151,"source":"refund.csv"}
+  ]
+}
+```
+
+示例中，激活率提升 4 个百分点，达到目标；退款率上升 1 个百分点，超过 0.5 的上限，总体为 `breached`。到期前逐项显示 `pending`。到期后，重复、缺失、口径不符或样本不足的指标显示 `insufficient-data`。总体优先显示已知的护栏越线，其次是主指标未达标，再次是数据不足。所有指标达标才返回 `met`。判定衡量预设阈值，扩大试验由负责人决定。未登记阈值的实验卡仍可用于草拟计划。
+
 ## 典型用法
 
 第一次使用时，建议先从目标导向入口开始：

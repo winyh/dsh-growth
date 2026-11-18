@@ -61,7 +61,7 @@ export function reviewArtifact(value: unknown, expectedType?: string): ArtifactR
   } else {
     warnings.push('旧版或缺少内容校验版本；请由来源插件重新生成，不能自动视为已验证。')
   }
-  if (!staleAfter) warnings.push('缺少 staleAfter，无法自动判断证据是否过期。')
+  if (!staleAfter && artifactType !== 'growth-experiment-plan') warnings.push('缺少 staleAfter，无法自动判断证据是否过期。')
   const stale = validDate(staleAfter) && Date.parse(staleAfter) <= Date.now()
   if (stale) warnings.push(`工件已过期：${staleAfter}。`)
   const status = issues.length > 0 ? 'blocked' : stale ? 'stale' : warnings.length > 0 ? 'partial' : 'ready'

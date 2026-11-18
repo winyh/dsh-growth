@@ -1,6 +1,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { handoffParameters, receiveHandoff } from './handoff-receive.js'
+import { assessExperiment } from './experiment-assessment.js'
 import { reviewGrowthAttribution } from './attribution.js'
 import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import type {} from '@deepseek-ai/dsh-fs'
@@ -726,6 +727,7 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
       stage: { type: 'string', required: true, description: 'acquisition, activation, retention, referral or revenue.' },
       targetMetric: { type: 'string', required: true, description: 'Primary metric.' },
       guardrails: { type: 'string', description: 'Comma-separated guardrail metrics.' },
+      criteriaJson: { type: 'string', description: 'Register before start: {start,end,primary,guardrails:[...]}. Each rule has metric, unit, direction (at-least/at-most), threshold and optional minPerGroup. Compare treatment minus control. End is exclusive; use pp for percentage points.' },
       owner: { type: 'string', description: 'Experiment owner.' },
       audience: { type: 'string', description: 'Target audience or segment.' },
       durationDays: { type: 'number', description: 'Experiment duration; defaults to 14.' },
@@ -746,6 +748,7 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
         stage: validStage(args.stage),
         targetMetric: args.targetMetric,
         guardrails: parseGuardrails(args.guardrails),
+        criteriaJson: args.criteriaJson,
         owner: args.owner,
         audience: args.audience,
         durationDays: args.durationDays,
@@ -755,7 +758,21 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
         effort: args.effort,
         ease: args.ease,
         method,
-      }), { nextActions: ['Record the experiment owner, launch date, decision date and instrumentation before starting.'] })
+      }), { nextActions: [args.criteriaJson ? 'Save the full plan JSON. After end, call growth_experiment_assess with the plan and full-window group observations.' : 'Record the experiment owner, launch date, decision date and instrumentation before starting.'] })
+    },
+  }))
+
+  ctx.tools.register(defineTool({
+    name: 'growth_experiment_assess',
+    description: 'Grade primary and guardrail deltas against the preregistered plan after the observation window ends. Reports each outcome and insufficient evidence.',
+    parameters: {
+      planJson: { type: 'string', required: true, description: 'Original growth_experiment preregistration result envelope or its data object.' },
+      observationsJson: { type: 'string', description: 'Full-window evidence {planHash,start,end,rows:[{metric,unit,control,treatment,controlN,treatmentN,source}]}. planHash is plan.contentHash; pp rates use 0 to 100.' },
+    },
+    output: growthOutput(config.maxResultChars),
+    async execute(args) {
+      return wrapResult(assessExperiment(JSON.parse(args.planJson) as unknown,
+        args.observationsJson === undefined ? undefined : JSON.parse(args.observationsJson) as unknown))
     },
   }))
 
