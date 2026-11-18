@@ -292,7 +292,8 @@ export interface FunnelAnalysis {
 export interface CohortCell {
   period: number
   cohortSize: number
-  retainedUsers: number
+  observed: boolean
+  retainedUsers: number | null
   retentionRate: number | null
 }
 
@@ -303,6 +304,7 @@ export interface CohortAnalysis {
   retentionEvent: string
   interval: 'day' | 'week' | 'month'
   timezone?: string
+  observedThrough: string | null
   cohorts: Array<{
     cohort: string
     size: number

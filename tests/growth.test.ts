@@ -58,6 +58,23 @@ describe('growth analysis', () => {
     expect(result.stages[1]?.users).toBe(1)
   })
 
+  it('preserves the ordered funnel, window and channel attribution across export orders', () => {
+    const rows = ['visit', 'signup', 'active', 'pay'].map((event, i) => ({
+      user_id: 'u', event, timestamp: '2026-01-0' + (i + 1), channel: event,
+    }))
+    for (const [attribution, channel] of [['first-touch', 'visit'], ['entry-touch', 'signup'], ['last-touch', 'pay']] as const) {
+      for (const input of [rows, rows.toReversed(), [rows[2]!, rows[0]!, rows[3]!, rows[1]!]]) {
+        const result = analyzeFunnel('events', input, {
+          stages: ['signup', 'active', 'pay'].map(event => ({ name: event, event })),
+          userField: 'user_id', eventField: 'event', sequenceMode: 'ordered',
+          conversionWindowDays: 1, channelField: 'channel', attribution,
+        })
+        expect(result.stages.map(stage => stage.users)).toEqual([1, 1, 0])
+        expect(result.byChannel[channel]).toEqual(result.stages)
+      }
+    }
+  })
+
   it('builds a daily retention cohort', () => {
     const result = analyzeCohorts('events.json', events, {
       cohortEvent: 'acquired',
@@ -66,11 +83,26 @@ describe('growth analysis', () => {
       eventField: 'event',
       timeField: 'timestamp',
       interval: 'day',
+      observedThrough: '2026-01-02',
       maxPeriods: 3,
     })
     expect(result.cohorts).toHaveLength(1)
     expect(result.cohorts[0]?.cells[0]?.retentionRate).toBe(0)
     expect(result.cohorts[0]?.cells[1]?.retainedUsers).toBe(1)
+  })
+
+  it('only reports zero after a whole retention window has been observed', () => {
+    const options = { cohortEvent: 'signup', retentionEvent: 'active', userField: 'u', eventField: 'e',
+      timeField: 't', interval: 'day' as const, maxPeriods: 3, timezone: 'Asia/Shanghai' }
+    const rows = [{ u: '1', e: 'signup', t: '2026-01-31T16:01:00Z' }]
+    const cells = (interval: 'day' | 'week' | 'month', observedThrough?: string) =>
+      analyzeCohorts('export', rows, { ...options, interval, observedThrough }).cohorts[0]!.cells
+    expect(cells('day').map(cell => cell.retentionRate)).toEqual([null, null, null])
+    expect(cells('day', '2026-02-02').map(cell => cell.retainedUsers)).toEqual([0, 0, null])
+    expect(cells('week', '2026-02-06')[0]?.observed).toBe(false)
+    expect(cells('week', '2026-02-07')[0]?.retentionRate).toBe(0)
+    expect(cells('month', '2026-02-28').map(cell => cell.retentionRate)).toEqual([0, null, null])
+    expect(() => cells('day', '2026-02-30')).toThrow('observedThrough')
   })
 
   it('identifies users who return after an inactive period', () => {

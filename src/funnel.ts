@@ -18,8 +18,13 @@ export interface FunnelOptions {
 }
 interface TimelineEvent {
   event: string
-  rowIndex: number
   time: number | null
+}
+
+function orderTimeline<T extends { time: number | null }>(timeline: T[]): T[] {
+  // Keep source order for ties and for timelines with incomplete timestamps.
+  if (timeline.every(item => item.time !== null)) timeline.sort((a, b) => Number(a.time) - Number(b.time))
+  return timeline
 }
 
 function stageForAnyEvent(rows: Row[], options: FunnelOptions): FunnelStageResult[] {
@@ -54,31 +59,31 @@ function stageForOrdered(rows: Row[], options: FunnelOptions): FunnelStageResult
   const usersByStage = options.stages.map(() => new Set<string>())
   const stageEvents = new Set(options.stages.map((stage) => stage.event))
   const timelines = new Map<string, TimelineEvent[]>()
-  rows.forEach((row, rowIndex) => {
+  rows.forEach(row => {
     const user = stringValue(row, options.userField)
     const event = stringValue(row, options.eventField)
     if (!user || !event || !stageEvents.has(event)) return
     const date = dateValue(row, options.timeField ?? 'timestamp') ?? dateValue(row, 'date') ?? dateValue(row, 'occurred_at')
     const timeline = timelines.get(user) ?? []
-    timeline.push({ event, rowIndex, time: date?.getTime() ?? null })
+    timeline.push({ event, time: date?.getTime() ?? null })
     timelines.set(user, timeline)
   })
   for (const [user, timeline] of timelines) {
-    timeline.sort((left, right) => left.rowIndex - right.rowIndex)
+    orderTimeline(timeline)
     let lastIndex = -1
     let entryTime: number | null = null
     for (const [stageIndex, stage] of options.stages.entries()) {
-      const match = timeline.find((item) => {
-        if (item.event !== stage.event || item.rowIndex <= lastIndex) return false
+      const index = timeline.findIndex((item, index) => {
+        if (item.event !== stage.event || index <= lastIndex) return false
         if (stageIndex > 0 && options.conversionWindowDays !== undefined && entryTime !== null && item.time !== null) {
-          return item.time - entryTime <= options.conversionWindowDays * 86_400_000
+          return item.time >= entryTime && item.time - entryTime <= options.conversionWindowDays * 86_400_000
         }
         return true
       })
-      if (!match) break
+      if (index < 0) break
       usersByStage[stageIndex]?.add(user)
-      lastIndex = match.rowIndex
-      if (stageIndex === 0) entryTime = match.time
+      lastIndex = index
+      if (stageIndex === 0) entryTime = timeline[index]!.time
     }
   }
   const usersByEvent = new Map(options.stages.map((stage, index) => [stage.event, usersByStage[index] ?? new Set<string>()]))
@@ -103,18 +108,18 @@ function grouped(rows: Row[], field: string | undefined): Record<string, Row[]> 
 function attributedGroups(rows: Row[], options: FunnelOptions): Record<string, Row[]> {
   if (!options.channelField) return {}
   const attribution = options.attribution ?? 'entry-touch'
-  const timelines = new Map<string, Array<{ row: Row; index: number; time: number | null; event?: string }>>()
-  rows.forEach((row, index) => {
+  const timelines = new Map<string, Array<{ row: Row; time: number | null; event?: string }>>()
+  rows.forEach(row => {
     const user = stringValue(row, options.userField)
     if (!user) return
     const timeline = timelines.get(user) ?? []
     const date = dateValue(row, options.timeField ?? 'timestamp') ?? dateValue(row, 'date') ?? dateValue(row, 'occurred_at')
-    timeline.push({ row, index, time: date?.getTime() ?? null, event: stringValue(row, options.eventField) })
+    timeline.push({ row, time: date?.getTime() ?? null, event: stringValue(row, options.eventField) })
     timelines.set(user, timeline)
   })
   const groups: Record<string, Row[]> = {}
   for (const timeline of timelines.values()) {
-    const ordered = timeline.toSorted((left, right) => left.index - right.index)
+    const ordered = orderTimeline(timeline)
     const first = ordered[0]
     const last = ordered.at(-1)
     const entry = ordered.find((item) => item.event === options.stages[0]?.event) ?? first

@@ -67,6 +67,11 @@ export function receiveHandoff(value: unknown, options: ReceiveOptions) {
           && typeof row.count === 'number' && Number.isInteger(row.count) && row.count > 0
       }))) missing.push('feedback.reason/count')
     const summary = asRecord(source.summary)
+    for (const [count, missingCount, total] of [['won', 'missingWonAmounts', 'wonAmount'], ['lost', 'missingLostAmounts', 'lostAmount']] as const) {
+      if (Number(summary[count]) > 0 && (summary[missingCount] !== 0 || !Number.isFinite(summary[total]))) {
+        missing.push('核验销售金额及缺失笔数：' + total)
+      }
+    }
     if (![summary.won, summary.lost].every(n => typeof n === 'number' && Number.isInteger(n) && n >= 0)) missing.push('summary.won/lost')
     else if (Number(summary.won) + Number(summary.lost) === 0) missing.push('没有可复盘的成交或失单记录')
   }

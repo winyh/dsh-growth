@@ -13,7 +13,7 @@ function fixture(type: string, changes: Record<string, unknown> = {}) {
     artifactType: type, handoffFrom: route.from, handoffTo: route.mode === 'direct' ? artifactDomain : 'dsh-product',
     status: type === 'product-feedback-closure' ? 'verified' : 'ready', generatedAt: new Date().toISOString(),
     validationExperiment: { method: 'interview', successThreshold: '3/5' },
-    productDecision: 'proceed', summary: { won: 1, lost: 2 }, warnings: ['不是业务效果或审批证明'],
+    productDecision: 'proceed', summary: { won: 1, lost: 2, wonAmount: 0, lostAmount: 80, missingWonAmounts: 0, missingLostAmounts: 0 }, warnings: ['不是业务效果或审批证明'],
   }
   for (const field of route.text) raw[field] = 'fixture-' + field
   for (const field of route.lists) raw[field] = ['fixture-evidence']
@@ -35,6 +35,14 @@ describe('owned handoff receipt', () => {
       expect(receipt.nextTool).toBe(handoffRoutes[type]!.nextTool)
     })
   }
+  it('keeps incomplete or legacy revenue evidence pending while preserving the outcome counts', () => {
+    for (const summary of [{ won: 2, lost: 0, wonAmount: null, knownWonAmount: 80, missingWonAmounts: 1 },
+      { won: 1, lost: 0, wonAmount: 0 }]) {
+      const receipt = receiveHandoff(fixture('sales-feedback-handoff', { summary }), options)
+      expect(receipt.status).toBe('needs-validation')
+      expect(receipt.context.summary).toEqual(summary)
+    }
+  })
   const type = Object.keys(handoffRoutes)[0]!
   it('rejects failed calls, wrong producers, unknown types and tampered payloads', () => {
     expect(receiveHandoff({ ok: false, data: fixture(type) }, options).status).toBe('blocked')

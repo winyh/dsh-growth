@@ -161,7 +161,7 @@ function reportInputFromReview(value: string): {
   const cohort = review.analyses.cohort
   if (cohort) {
     const cell = cohort.cohorts[0]?.cells.find((item) => item.period === 1)
-    if (cell) metrics.push({ name: 'retention period 1', current: `${cell.retentionRate ?? '-'}%`, source: cohort.source })
+    if (cell && cell.retentionRate !== null) metrics.push({ name: 'retention period 1', current: `${cell.retentionRate}%`, source: cohort.source })
   }
   const economics = review.analyses.economics
   const latest = economics?.periods.at(-1)
@@ -434,6 +434,7 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
       goal: { type: 'string', required: true, description: 'Business goal or decision to support, such as improve activation or decide whether to scale a channel.' },
       root: { type: 'string', description: 'Optional directory under defaultRoot to scan when eventPath and economicsPath are omitted.' },
       eventPath: { type: 'string', description: 'Optional event dataset path for funnel/cohort analysis.' },
+      observedThrough: { type: 'string', description: 'Last fully covered local date for retention (YYYY-MM-DD, inclusive).' },
       economicsPath: { type: 'string', description: 'Optional MRR movement/cost dataset path for unit economics.' },
       notePath: { type: 'string', description: 'Optional Markdown growth note path for context and evidence audit.' },
       userField: { type: 'string', description: 'Optional event user identifier field.' },
@@ -513,6 +514,8 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
           if (acquisition && retention && profile.selectedFields.timeField) {
             cohort = analyzeCohorts(eventPath, dataset.rows, {
               cohortEvent: acquisition.event,
+              observedThrough: args.observedThrough,
+              timezone: config.defaultTimezone,
               retentionEvent: retention.event,
               userField: profile.selectedFields.userField,
               eventField: profile.selectedFields.eventField,
@@ -615,6 +618,7 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
     description: 'Analyze retention cohorts from an event dataset by day, week or month, including lifecycle counts.',
     parameters: {
       sourcePath: { type: 'string', required: true, description: 'CSV, JSON or JSONL event dataset path.' },
+      observedThrough: { type: 'string', description: 'Last fully covered local date (YYYY-MM-DD, inclusive). Defaults to the day before the last event.' },
       cohortEvent: { type: 'string', required: true, description: 'Event defining cohort entry, such as signup.' },
       retentionEvent: { type: 'string', required: true, description: 'Event defining retained activity, such as active.' },
       userField: { type: 'string', description: 'User ID field; defaults to user_id.' },
@@ -629,6 +633,7 @@ export function registerGrowthTools(ctx: Context, config: GrowthConfig): void {
       const dataset = await readDataset(fs, config, args.sourcePath, exec.signal)
       const result = analyzeCohorts(args.sourcePath, dataset.rows, {
         cohortEvent: args.cohortEvent,
+        observedThrough: args.observedThrough,
         retentionEvent: args.retentionEvent,
         userField: args.userField?.trim() || 'user_id',
         eventField: args.eventField?.trim() || 'event',

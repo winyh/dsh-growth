@@ -1,3 +1,4 @@
+import { validDate } from './artifact-integrity.js'
 import { dateValue, stringValue } from './data.js'
 import { intervalIndex, normalizePeriod, percentage } from './metrics.js'
 import type { CohortAnalysis, Row } from './types.js'
@@ -9,6 +10,7 @@ export interface CohortOptions {
   eventField: string
   timeField: string
   interval: 'day' | 'week' | 'month'
+  observedThrough?: string
   maxPeriods: number
   timezone?: string
 }
@@ -28,8 +30,25 @@ function periodDistance(left: string, right: string, interval: CohortOptions['in
 export function analyzeCohorts(source: string, rows: Row[], options: CohortOptions): CohortAnalysis {
   const warnings: string[] = []
   const timezone = options.timezone ?? 'UTC'
+  if (options.observedThrough !== undefined && (!validDate(options.observedThrough) || options.observedThrough.length !== 10)) {
+    throw new Error('observedThrough must be an inclusive local calendar date (YYYY-MM-DD)')
+  }
+  let latestDay = ''
+  const coveredRows = rows.filter(row => {
+    const date = dateValue(row, options.timeField)
+    if (!date) return false
+    const day = normalizePeriod(date, 'day', timezone)
+    if (day > latestDay) latestDay = day
+    return !options.observedThrough || day <= options.observedThrough
+  })
+  // A timestamp only proves the export reached that instant. Its last day may be incomplete.
+  let observedThrough = options.observedThrough
+  if (!observedThrough && latestDay) {
+    observedThrough = new Date(Date.parse(latestDay) - 86_400_000).toISOString().slice(0, 10)
+    warnings.push('Coverage inferred through ' + observedThrough + '; supply observedThrough for a confirmed export boundary.')
+  }
   const cohortStarts = new Map<string, Date>()
-  for (const row of rows) {
+  for (const row of coveredRows) {
     if (stringValue(row, options.eventField) !== options.cohortEvent) continue
     const user = stringValue(row, options.userField)
     const date = dateValue(row, options.timeField)
@@ -40,12 +59,12 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
   if (cohortStarts.size === 0) warnings.push(`No cohort users found for event '${options.cohortEvent}'`)
 
   const retained = new Map<string, Map<number, Set<string>>>()
-  for (const row of rows) {
+  for (const row of coveredRows) {
     if (stringValue(row, options.eventField) !== options.retentionEvent) continue
     const user = stringValue(row, options.userField)
     const date = dateValue(row, options.timeField)
     const start = user ? cohortStarts.get(user) : undefined
-    if (!user || !date || !start) continue
+    if (!user || !date || !start || date < start) continue
     const index = intervalIndex(start, date, options.interval, timezone)
     if (index < 0 || index >= options.maxPeriods) continue
     const cohort = normalizePeriod(start, options.interval, timezone)
@@ -60,19 +79,28 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
   }
 
   const cohortSizes = new Map<string, number>()
+  const latestEntryDay = new Map<string, string>()
   for (const start of cohortStarts.values()) {
     const cohort = normalizePeriod(start, options.interval, timezone)
+    const day = normalizePeriod(start, 'day', timezone)
+    if (day > (latestEntryDay.get(cohort) ?? '')) latestEntryDay.set(cohort, day)
     cohortSizes.set(cohort, (cohortSizes.get(cohort) ?? 0) + 1)
   }
   const cohorts = Array.from(cohortSizes.entries()).sort(([left], [right]) => left.localeCompare(right)).map(([cohort, size]) => {
     const periods = retained.get(cohort) ?? new Map<number, Set<string>>()
     const cells = Array.from({ length: options.maxPeriods }, (_, period) => {
-      const retainedUsers = periods.get(period)?.size ?? 0
+      // Weekly cells use seven-day windows relative to each user's entry.
+      const end = new Date(latestEntryDay.get(cohort)!)
+      if (options.interval === 'month') end.setUTCMonth(end.getUTCMonth() + period + 1, 0)
+      else end.setUTCDate(end.getUTCDate() + (options.interval === 'week' ? 7 * period + 6 : period))
+      const observed = !!observedThrough && end.toISOString().slice(0, 10) <= observedThrough
+      const retainedUsers = observed ? periods.get(period)?.size ?? 0 : null
       return {
         period,
         cohortSize: size,
         retainedUsers,
-        retentionRate: percentage(retainedUsers / size),
+        observed,
+        retentionRate: retainedUsers === null ? null : percentage(retainedUsers / size),
       }
     })
     return { cohort, size, cells }
@@ -80,7 +108,7 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
 
   const lifecycle: Record<string, number> = { new: 0, retained: 0, resurrected: 0, dormant: 0 }
   const activeByUser = new Map<string, string[]>()
-  for (const row of rows) {
+  for (const row of coveredRows) {
     const user = stringValue(row, options.userField)
     const date = dateValue(row, options.timeField)
     if (!user || !date || stringValue(row, options.eventField) !== options.retentionEvent) continue
@@ -105,6 +133,7 @@ export function analyzeCohorts(source: string, rows: Row[], options: CohortOptio
     retentionEvent: options.retentionEvent,
     interval: options.interval,
     timezone,
+    observedThrough: observedThrough ?? null,
     cohorts,
     lifecycle,
     warnings,
